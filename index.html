@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gymlog</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gymlog">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#EDF0F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#13171C" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EDF0F2;--surface:#FFFFFF;--ink:#18202A;--muted:#5E6873;--line:#D5DBE0;--soft:#E4E9ED;
+  --accent:#1F5AA6;--accent-ink:#FFFFFF;--ok:#2E8B4E;--danger:#C8312B;--warn:#FFF4D1;--warn-ink:#6B4E00;
+  color-scheme:light;box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#13171C;--surface:#1C2229;--ink:#E7EBEE;--muted:#98A2AC;--line:#2C353E;--soft:#252D35;
+    --accent:#6A9BE0;--accent-ink:#0E1620;--ok:#5DBB7E;--danger:#E8665F;--warn:#3A3220;--warn-ink:#F2D58A;color-scheme:dark;
+  }
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
+header.top{max-width:640px;margin:0 auto;padding:18px 16px 4px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font:700 2.3rem/1 "Barlow Condensed","Arial Narrow",sans-serif;margin:0}
+.today{color:var(--muted);font-size:.95rem}
+main{max-width:640px;margin:0 auto;padding:8px 16px 120px}
+h2{font:700 1.6rem/1.1 "Barlow Condensed","Arial Narrow",sans-serif;margin:26px 0 10px}
+h3{font:600 1.2rem/1.2 "Barlow Condensed","Arial Narrow",sans-serif;margin:0}
+p{margin:6px 0}
+.muted{color:var(--muted)} .small{font-size:.9rem}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs button{flex:1;max-width:160px;border:0;border-top:3px solid transparent;background:none;color:var(--muted);font:600 1.05rem "Barlow Condensed","Arial Narrow",sans-serif;padding:11px 4px 13px;cursor:pointer}
+nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--accent)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 6px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 14px;font:500 .95rem "Barlow",sans-serif;white-space:nowrap;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ex{background:var(--surface);border:1px solid var(--line);border-left:7px solid var(--plate,var(--muted));border-radius:6px;padding:14px 14px 12px;margin:12px 0}
+.ex-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ex-name{font:600 1.3rem/1.15 "Barlow Condensed","Arial Narrow",sans-serif}
+.group{font-size:.82rem;color:var(--muted)}
+.done-tag{font-size:.82rem;font-weight:600;color:var(--ok);white-space:nowrap}
+.last{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:6px}
+.big{font:700 3rem/1 "Barlow Condensed","Arial Narrow",sans-serif;font-variant-numeric:tabular-nums}
+.big .u{font-size:1.15rem;color:var(--muted);margin-left:3px}
+.big.none{font-size:1.4rem;color:var(--muted);font-weight:600}
+.sr{font:600 1.35rem/1 "Barlow Condensed","Arial Narrow",sans-serif}
+.note{margin-top:8px;padding:6px 9px;background:var(--soft);border-radius:4px;font-size:.95rem}
+.log{display:flex;gap:8px;margin-top:12px;align-items:flex-end}
+.log .w{flex:1;min-width:0}
+.log .n{width:62px;flex:none}
+.log2{display:flex;gap:8px;margin-top:8px}
+.log2 input{flex:1}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted)}
+input,select{font:500 1.05rem "Barlow",system-ui,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%;min-width:0}
+input[type=number]{font-variant-numeric:tabular-nums}
+.stepper{display:flex}
+.stepper input{text-align:center;border-radius:0;border-left:0;border-right:0}
+.stepper button{flex:none;width:40px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 1.2rem "Barlow",sans-serif;cursor:pointer}
+.stepper button:first-child{border-radius:4px 0 0 4px}
+.stepper button:last-child{border-radius:0 4px 4px 0}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:4px;padding:9px 16px;font:600 1rem "Barlow",sans-serif;cursor:pointer;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+.btn.sm{padding:5px 10px;font-size:.9rem}
+.link{background:none;border:0;padding:0;color:var(--accent);font:500 .92rem "Barlow",sans-serif;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hist{margin-top:10px;border-top:1px solid var(--line);padding-top:6px}
+.hrow{display:grid;grid-template-columns:62px 1fr auto;gap:8px;padding:5px 0;font-size:.93rem;align-items:start}
+.x{background:none;border:0;color:var(--muted);cursor:pointer;font-size:1.1rem;line-height:1;padding:0 4px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;margin:12px 0}
+.banner{background:var(--warn);color:var(--warn-ink);border-radius:6px;padding:10px 12px;margin:8px 0;font-size:.93rem;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.banner .link{color:inherit}
+.empty{text-align:center;padding:36px 12px}
+.empty h3{font-size:1.5rem;margin-bottom:6px}
+.rlist{list-style:none;margin:10px 0 0;padding:0}
+.rlist li{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line)}
+.rlist li .nm{flex:1;min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--plate)}
+.ib{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:4px;width:32px;height:32px;cursor:pointer;font-size:.95rem}
+.ib[disabled]{opacity:.35}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cat{columns:2;column-gap:16px;font-size:.93rem;margin-top:8px}
+.cat div{break-inside:avoid;display:flex;gap:7px;align-items:center;padding:2px 0}
+.stats{display:flex;gap:22px;flex-wrap:wrap;margin:8px 0 4px}
+.stat .v{font:700 2.2rem/1 "Barlow Condensed","Arial Narrow",sans-serif;font-variant-numeric:tabular-nums}
+.stat .l{font-size:.85rem;color:var(--muted)}
+.delta.down{color:var(--ok)} .delta.up{color:var(--danger)}
+.chart{width:100%;height:auto;display:block;margin-top:8px}
+.tablewrap{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:.92rem;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:600;color:var(--muted)}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(72px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:4px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Gymlog</h1>
+  <span class="today" id="todayLbl"></span>
+</header>
+<main id="main"></main>
+<nav class="tabs" aria-label="Onderdelen">
+  <button data-act="tab:vandaag">Vandaag</button>
+  <button data-act="tab:schemas">Schema’s</button>
+  <button data-act="tab:metingen">Metingen</button>
+  <button data-act="tab:backup">Back-up</button>
+</nav>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+const KEY='gymlog-v1';
+const GROUPS={Borst:'#2E8B4E',Rug:'#1F5AA6',Benen:'#C8312B',Schouders:'#E0A800',Armen:'#7A4FA0',Core:'#6B7682',Cardio:'#D9741E'};
+const DEFAULT_EX=[
+  ['bench-press','Bankdrukken','Borst'],['incline-db-press','Schuin drukken met dumbbells','Borst'],['chest-press','Chest press (machine)','Borst'],['pec-fly','Pec fly','Borst'],
+  ['lat-pulldown','Lat pulldown','Rug'],['seated-row','Seated row','Rug'],['deadlift','Deadlift','Rug'],['back-extension','Back extension','Rug'],
+  ['squat','Squat','Benen'],['leg-press','Leg press','Benen'],['leg-extension','Leg extension','Benen'],['leg-curl','Leg curl','Benen'],['lunges','Lunges','Benen'],['calf-raise','Calf raise','Benen'],
+  ['shoulder-press','Shoulder press','Schouders'],['lateral-raise','Lateral raise','Schouders'],
+  ['biceps-curl','Biceps curl','Armen'],['triceps-pushdown','Triceps pushdown','Armen'],
+  ['plank','Plank','Core'],['crunch-machine','Crunch (machine)','Core'],
+  ['treadmill','Loopband','Cardio'],['rowing','Roeitrainer','Cardio']
+].map(([id,name,group])=>({id,name,group}));
+const METRICS=[
+  {k:'weight',l:'Gewicht',u:'kg',lowerBetter:true},
+  {k:'fat',l:'Vetpercentage',u:'%',lowerBetter:true},
+  {k:'muscle',l:'Spiermassa',u:'kg',lowerBetter:false},
+  {k:'visceral',l:'Visceraal vet',u:'',lowerBetter:true},
+  {k:'metaAge',l:'Metabole leeftijd',u:'jr',lowerBetter:true},
+  {k:'waist',l:'Buikomtrek',u:'cm',lowerBetter:true},
+  {k:'bmi',l:'BMI',u:'',lowerBetter:true,computed:true}
+];
+const TABS=['vandaag','schemas','metingen','backup'];
+
+function pad(n){return String(n).padStart(2,'0')}
+function today(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function fmtDate(iso){if(!iso)return '';return new Date(iso.slice(0,10)+'T12:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}
+function fmtN(v,dec){if(v==null||v==='')return '–';return Number(v).toLocaleString('nl-NL',{maximumFractionDigits:dec==null?1:dec})}
+function num(v){if(v==null)return null;const s=String(v).replace(',','.').trim();if(s==='')return null;const n=Number(s);return isFinite(n)?n:null}
+function int(v){const n=num(v);return n==null?null:Math.round(n)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function rid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function daysSince(iso){if(!iso)return Infinity;return Math.floor((Date.now()-new Date(iso).getTime())/864e5)}
+
+/* ---------- opslag op het toestel ---------- */
+function fresh(){return {v:1,exercises:DEFAULT_EX.slice(),routines:[],entries:[],meas:[],height:null,lastBackup:null}}
+function load(){try{const s=localStorage.getItem(KEY);if(s){const d=JSON.parse(s);return Object.assign(fresh(),d)}}catch(e){}return fresh()}
+let D=load();
+let storageOk=true;
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(D));storageOk=true}
+  catch(e){storageOk=false;toast('Opslaan op dit toestel lukt niet. Is de opslag vol of staat privémodus aan?')}
+}
+if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{})}
+
+const S={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'vandaag',routineId:null,drafts:{},hist:{},
+  mDraft:{date:today()},metric:'weight',newEx:{name:'',group:'Borst'},confirmDel:null,pendingImport:null,confirmWipe:false};
+
+const $=s=>document.querySelector(s);
+document.getElementById('todayLbl').textContent=new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+let toastT;
+function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2600)}
+
+function exById(id){return D.exercises.find(e=>e.id===id)}
+function plate(ex){return GROUPS[ex&&ex.group]||'#6B7682'}
+function entriesFor(exId){return D.entries.filter(e=>e.exerciseId===exId).sort((a,b)=>b.ts-a.ts)}
+function lastFor(exId){return entriesFor(exId)[0]||null}
+
+/* ---------- render ---------- */
+function render(){
+  const a=document.activeElement;const fid=a&&a.id?a.id:null;let ss=null,se=null;
+  try{ss=a.selectionStart;se=a.selectionEnd}catch(e){}
+  $('#main').innerHTML=view();
+  document.querySelectorAll('nav.tabs button').forEach(b=>{
+    if(b.dataset.act==='tab:'+S.tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
+  });
+  if(fid){const el=document.getElementById(fid);if(el){el.focus({preventScroll:true});try{if(ss!=null)el.setSelectionRange(ss,se)}catch(e){}}}
+}
+function view(){
+  if(S.tab==='schemas')return vSchemas();
+  if(S.tab==='metingen')return vMeas();
+  if(S.tab==='backup')return vBackup();
+  return vToday();
+}
+function empty(t,p,btn,act){return '<div class="empty"><h3>'+esc(t)+'</h3><p class="muted">'+esc(p)+'</p>'+(btn?'<p style="margin-top:14px"><button class="btn" data-act="'+act+'">'+esc(btn)+'</button></p>':'')+'</div>'}
+function backupBanner(){
+  const n=D.entries.length+D.meas.length;if(!n)return '';
+  const d=daysSince(D.lastBackup);if(d<14)return '';
+  return '<div class="banner"><span>'+(D.lastBackup?'Je laatste back-up is van '+d+' dagen geleden.':'Je hebt nog geen back-up gemaakt.')+'</span><button class="link" data-act="tab:backup">Back-up maken</button></div>';
+}
+
+/* ---------- Vandaag ---------- */
+function vToday(){
+  const rs=D.routines;
+  let h=backupBanner();
+  if(!rs.length)return h+empty('Nog geen schema','Maak een schema met de oefeningen die je doet. Daarna staat hier bij elk bezoek je vorige gewicht klaar.','Schema maken','tab:schemas');
+  const r=rs.find(x=>x.id===S.routineId)||rs[0];S.routineId=r.id;
+  h+='<div class="chips" role="group" aria-label="Schema">'+rs.map(x=>'<button class="chip" aria-pressed="'+(x.id===r.id)+'" data-act="routine:'+esc(x.id)+'">'+esc(x.name)+'</button>').join('')+'</div>';
+  if(!r.exercises.length)return h+empty('Dit schema is leeg','Voeg oefeningen toe bij Schema’s.','Oefeningen toevoegen','tab:schemas');
+  const doneN=r.exercises.filter(id=>{const l=lastFor(id);return l&&l.date===today()}).length;
+  h+='<p class="muted small">'+doneN+' van '+r.exercises.length+' gedaan vandaag</p>';
+  return h+r.exercises.map(card).join('');
+}
+function draftFor(exId){
+  if(S.drafts[exId])return S.drafts[exId];
+  const l=lastFor(exId);
+  return {weight:l&&l.weight!=null?String(l.weight).replace('.',','):'',sets:l&&l.sets!=null?l.sets:3,reps:l&&l.reps!=null?l.reps:10,note:l&&l.note||''};
+}
+function card(exId){
+  const ex=exById(exId);if(!ex)return '';
+  const l=lastFor(exId);const d=draftFor(exId);const done=l&&l.date===today();const id=esc(exId);
+  let h='<section class="ex" style="--plate:'+plate(ex)+'">';
+  h+='<div class="ex-head"><div><div class="ex-name">'+esc(ex.name)+'</div><div class="group">'+esc(ex.group||'')+'</div></div>'+(done?'<span class="done-tag">✓ Gedaan</span>':'')+'</div>';
+  if(l){
+    h+='<div class="last"><span class="big">'+fmtN(l.weight)+'<span class="u">kg</span></span>'+(l.sets||l.reps?'<span class="sr">'+(l.sets||'?')+' × '+(l.reps||'?')+'</span>':'')+'<span class="muted small">'+(done?'vandaag':'laatst '+fmtDate(l.date))+'</span></div>';
+    if(l.note)h+='<div class="note">'+esc(l.note)+'</div>';
+  }else h+='<div class="last"><span class="big none">Nog niet gedaan</span></div>';
+  h+='<div class="log">'
+    +'<label class="f w">Gewicht (kg)<div class="stepper"><button type="button" aria-label="2,5 kg minder" data-act="step:'+id+':-2.5">−</button><input id="w-'+id+'" inputmode="decimal" data-draft="'+id+'|weight" value="'+esc(d.weight)+'"><button type="button" aria-label="2,5 kg meer" data-act="step:'+id+':2.5">+</button></div></label>'
+    +'<label class="f n">Sets<input id="s-'+id+'" inputmode="numeric" data-draft="'+id+'|sets" value="'+esc(d.sets)+'"></label>'
+    +'<label class="f n">Reps<input id="r-'+id+'" inputmode="numeric" data-draft="'+id+'|reps" value="'+esc(d.reps)+'"></label>'
+    +'</div>';
+  h+='<div class="log2"><input id="n-'+id+'" aria-label="Bijzonderheden" placeholder="Bijzonderheden, bijv. stoel stand 4" data-draft="'+id+'|note" value="'+esc(d.note)+'"><button class="btn" data-act="save:'+id+'">Opslaan</button></div>';
+  h+='<div style="margin-top:8px"><button class="link" data-act="hist:'+id+'">'+(S.hist[exId]?'Historie verbergen':'Historie')+'</button></div>';
+  if(S.hist[exId]){
+    const hs=entriesFor(exId).slice(0,10);
+    h+='<div class="hist">'+(hs.length?hs.map(e=>'<div class="hrow"><span class="muted">'+fmtDate(e.date)+'</span><span><b>'+fmtN(e.weight)+' kg</b>'+(e.sets||e.reps?' '+(e.sets||'?')+' × '+(e.reps||'?'):'')+(e.note?'<br><span class="muted">'+esc(e.note)+'</span>':'')+'</span><button class="x" aria-label="Verwijderen" data-act="delEntry:'+esc(e.id)+'">×</button></div>').join(''):'<p class="muted small">Nog geen historie.</p>')+'</div>';
+  }
+  return h+'</section>';
+}
+
+/* ---------- Schema's ---------- */
+function exOptions(){
+  let h='<option value="">Oefening toevoegen…</option>';
+  Object.keys(GROUPS).forEach(g=>{
+    const list=D.exercises.filter(e=>e.group===g).sort((a,b)=>a.name.localeCompare(b.name,'nl'));
+    if(list.length)h+='<optgroup label="'+g+'">'+list.map(e=>'<option value="'+esc(e.id)+'">'+esc(e.name)+'</option>').join('')+'</optgroup>';
+  });
+  return h;
+}
+function vSchemas(){
+  let h='<h2>Jouw schema’s</h2>';
+  if(!D.routines.length)h+='<p class="muted">Een schema is een vaste set oefeningen, bijvoorbeeld “Dag A” en “Dag B”.</p>';
+  D.routines.forEach(r=>{
+    const rI=esc(r.id);
+    h+='<div class="panel"><div style="display:flex;gap:8px"><input id="rn-'+rI+'" aria-label="Naam schema" data-rname="'+rI+'" value="'+esc(r.name)+'"><button class="btn '+(S.confirmDel===r.id?'danger':'ghost')+' sm" data-act="delRoutine:'+rI+'">'+(S.confirmDel===r.id?'Zeker weten?':'Verwijderen')+'</button></div>';
+    h+='<ul class="rlist">'+r.exercises.map((exId,i)=>{const ex=exById(exId);return '<li><span class="dot" style="--plate:'+plate(ex)+'"></span><span class="nm">'+esc(ex?ex.name:'Onbekende oefening')+'</span><button class="ib" aria-label="Omhoog" data-act="mv:'+rI+':'+i+':-1"'+(i===0?' disabled':'')+'>↑</button><button class="ib" aria-label="Omlaag" data-act="mv:'+rI+':'+i+':1"'+(i===r.exercises.length-1?' disabled':'')+'>↓</button><button class="ib" aria-label="Uit schema halen" data-act="rm:'+rI+':'+i+'">×</button></li>'}).join('')+'</ul>';
+    h+='<div style="margin-top:10px"><select aria-label="Oefening toevoegen" data-addto="'+rI+'">'+exOptions()+'</select></div></div>';
+  });
+  h+='<div class="panel"><h3>Nieuw schema</h3><div style="display:flex;gap:8px;margin-top:8px"><input id="nr-name" placeholder="Bijv. Dag A" aria-label="Naam nieuw schema"><button class="btn" data-act="newRoutine">Maken</button></div></div>';
+  h+='<h2>Oefeningen</h2><p class="muted small">Mis je er een? Voeg hem toe.</p>';
+  h+='<div class="panel"><div class="grid2"><label class="f">Naam<input id="ne-name" data-newex="name" value="'+esc(S.newEx.name)+'" placeholder="Bijv. Hip thrust"></label><label class="f">Spiergroep<select id="ne-group" data-newex="group">'+Object.keys(GROUPS).map(g=>'<option'+(g===S.newEx.group?' selected':'')+'>'+g+'</option>').join('')+'</select></label></div><p style="margin-top:10px"><button class="btn" data-act="addEx">Oefening toevoegen</button></p>';
+  h+='<div class="cat">'+D.exercises.slice().sort((a,b)=>a.name.localeCompare(b.name,'nl')).map(e=>'<div><span class="dot" style="--plate:'+plate(e)+'"></span>'+esc(e.name)+'</div>').join('')+'</div></div>';
+  return h;
+}
+
+/* ---------- Metingen ---------- */
+function measRows(){const h=num(D.height);return D.meas.slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.ts-b.ts).map(m=>{const o=Object.assign({},m);if(h&&m.weight!=null)o.bmi=m.weight/Math.pow(h/100,2);return o})}
+function vMeas(){
+  const rows=measRows();const md=S.mDraft;
+  let h='<h2>Metingen</h2>';
+  if(rows.length){
+    const met=METRICS.find(x=>x.k===S.metric)||METRICS[0];
+    const pts=rows.filter(r=>r[met.k]!=null).map(r=>({date:r.date,v:r[met.k]}));
+    h+='<div class="chips" role="group" aria-label="Meetwaarde">'+METRICS.map(x=>'<button class="chip" aria-pressed="'+(x.k===met.k)+'" data-act="metric:'+x.k+'">'+x.l+'</button>').join('')+'</div>';
+    if(met.k==='bmi'&&!num(D.height))h+='<p class="muted">Vul hieronder je lengte in om je BMI te zien.</p>';
+    else if(pts.length){
+      const lastP=pts[pts.length-1],firstP=pts[0],prev=pts[pts.length-2];
+      const dl=(a,b)=>{const d=a-b;if(Math.abs(d)<0.05)return '<span class="delta">gelijk</span>';const good=met.lowerBetter?d<0:d>0;return '<span class="delta '+(good?'down':'up')+'">'+(d>0?'+':'−')+fmtN(Math.abs(d))+'</span>'};
+      h+='<div class="stats"><div class="stat"><div class="v">'+fmtN(lastP.v)+(met.u?' <span class="small muted">'+met.u+'</span>':'')+'</div><div class="l">'+met.l+', '+fmtDate(lastP.date)+'</div></div>';
+      if(prev)h+='<div class="stat"><div class="v">'+dl(lastP.v,prev.v)+'</div><div class="l">t.o.v. vorige meting</div></div>';
+      if(pts.length>2)h+='<div class="stat"><div class="v">'+dl(lastP.v,firstP.v)+'</div><div class="l">sinds '+fmtDate(firstP.date)+'</div></div>';
+      h+='</div>'+chart(pts,met);
+    }else h+='<p class="muted">Nog geen waarden voor '+met.l.toLowerCase()+'.</p>';
+  }
+  h+='<div class="panel"><h3>Nieuwe meting</h3><div class="grid2" style="margin-top:10px">'
+    +'<label class="f">Datum<input type="date" id="m-date" data-m="date" value="'+esc(md.date||today())+'"></label>'
+    +METRICS.filter(x=>!x.computed).map(x=>'<label class="f">'+x.l+(x.u?' ('+x.u+')':'')+'<input id="m-'+x.k+'" inputmode="decimal" data-m="'+x.k+'" value="'+esc(md[x.k]||'')+'"></label>').join('')
+    +'</div><p style="margin-top:12px"><button class="btn" data-act="saveMeas">Meting opslaan</button></p></div>';
+  h+='<div class="panel"><label class="f" style="max-width:200px">Lengte (cm), voor BMI<input id="p-height" inputmode="numeric" data-height="1" value="'+esc(D.height||'')+'"></label></div>';
+  if(rows.length){
+    h+='<h2>Alle metingen</h2><div class="tablewrap"><table><thead><tr><th>Datum</th>'+METRICS.map(x=>'<th>'+x.l+'</th>').join('')+'<th></th></tr></thead><tbody>'
+      +rows.slice().reverse().map(r=>'<tr><td>'+fmtDate(r.date)+' '+r.date.slice(0,4)+'</td>'+METRICS.map(x=>'<td>'+fmtN(r[x.k])+'</td>').join('')+'<td><button class="link" data-act="delMeas:'+esc(r.id)+'">Verwijderen</button></td></tr>').join('')
+      +'</tbody></table></div>';
+  }
+  return h;
+}
+function chart(pts,met){
+  if(pts.length<2)return '<p class="muted small">Na twee metingen verschijnt hier je lijn.</p>';
+  const W=600,H=210,L=46,R=14,T=14,B=30;
+  const xs=pts.map(p=>new Date(p.date+'T12:00:00').getTime());
+  let x0=Math.min(...xs),x1=Math.max(...xs);if(x1===x0)x1=x0+864e5;
+  let y0=Math.min(...pts.map(p=>p.v)),y1=Math.max(...pts.map(p=>p.v));
+  const padY=(y1-y0)*0.15||1;y0-=padY;y1+=padY;
+  const X=t=>L+(t-x0)/(x1-x0)*(W-L-R),Y=v=>T+(1-(v-y0)/(y1-y0))*(H-T-B);
+  const line=pts.map((p,i)=>X(xs[i]).toFixed(1)+','+Y(p.v).toFixed(1)).join(' ');
+  let s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(met.l)+' over tijd">';
+  [y0+padY,(y0+y1)/2,y1-padY].forEach(v=>{const y=Y(v).toFixed(1);s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)" stroke-width="1"/><text x="'+(L-8)+'" y="'+y+'" dy="4" text-anchor="end" font-size="12" fill="var(--muted)" font-family="Barlow,sans-serif">'+fmtN(v)+'</text>'});
+  s+='<polyline points="'+line+'" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  pts.forEach((p,i)=>{s+='<circle cx="'+X(xs[i]).toFixed(1)+'" cy="'+Y(p.v).toFixed(1)+'" r="3.5" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"><title>'+fmtDate(p.date)+': '+fmtN(p.v)+'</title></circle>'});
+  s+='<text x="'+L+'" y="'+(H-8)+'" font-size="12" fill="var(--muted)" font-family="Barlow,sans-serif">'+fmtDate(pts[0].date)+'</text><text x="'+(W-R)+'" y="'+(H-8)+'" text-anchor="end" font-size="12" fill="var(--muted)" font-family="Barlow,sans-serif">'+fmtDate(pts[pts.length-1].date)+'</text>';
+  return s+'</svg>';
+}
+
+/* ---------- Back-up ---------- */
+function vBackup(){
+  let h='<h2>Back-up</h2>';
+  h+='<p class="muted">Al je gegevens staan alleen op dit toestel, in de opslag van deze app. Maak regelmatig een back-up: wis je je browsergegevens of vervang je je telefoon, dan is alles anders weg.</p>';
+  h+='<div class="panel"><h3>Back-up maken</h3><p class="small muted">'+(D.lastBackup?'Laatste back-up: '+new Date(D.lastBackup).toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'}):'Nog geen back-up gemaakt.')+'</p>'
+    +'<p class="small">Kies in het deelmenu “Bewaar in Bestanden” en daarna de map, bijvoorbeeld iCloud Drive.</p>'
+    +'<div class="btnrow"><button class="btn" data-act="exportJson">Back-up opslaan</button><button class="btn ghost" data-act="exportCsv">Metingen als CSV</button></div></div>';
+  h+='<div class="panel"><h3>Back-up terugzetten</h3><p class="small muted">Vervangt alles wat nu in de app staat.</p>';
+  if(S.pendingImport){
+    const p=S.pendingImport;
+    h+='<p>Gevonden: '+p.entries.length+' trainingsregels, '+p.meas.length+' metingen, '+p.routines.length+' schema’s.</p><div class="btnrow"><button class="btn danger" data-act="importConfirm">Vervangen</button><button class="btn ghost" data-act="importCancel">Annuleren</button></div>';
+  }else h+='<div class="btnrow"><button class="btn ghost" data-act="importPick">Back-upbestand kiezen</button></div>';
+  h+='</div>';
+  h+='<div class="panel"><h3>Op dit toestel</h3><p class="small">'+D.entries.length+' trainingsregels, '+D.meas.length+' metingen, '+D.routines.length+' schema’s.</p>'
+    +'<div class="btnrow"><button class="btn danger sm" data-act="wipe">'+(S.confirmWipe?'Echt alles wissen?':'Alles wissen')+'</button></div></div>';
+  return h;
+}
+async function shareOrDownload(name,text,type){
+  const blob=new Blob([text],{type});
+  try{
+    const file=new File([blob],name,{type});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return true}
+  }catch(e){if(e&&e.name==='AbortError')return false}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);return true;
+}
+async function exportJson(){
+  const ok=await shareOrDownload('gymlog-backup-'+today()+'.json',JSON.stringify(D,null,1),'application/json');
+  if(ok){D.lastBackup=new Date().toISOString();save();render();toast('Back-up gemaakt')}
+}
+async function exportCsv(){
+  const cols=['date'].concat(METRICS.map(x=>x.k));
+  const head=['Datum'].concat(METRICS.map(x=>x.l+(x.u?' ('+x.u+')':'')));
+  const rows=measRows().map(r=>cols.map(c=>c==='date'?r.date:(r[c]==null?'':String(Math.round(r[c]*10)/10).replace('.',','))).join(';'));
+  await shareOrDownload('gymlog-metingen-'+today()+'.csv','\ufeff'+[head.join(';')].concat(rows).join('\n'),'text/csv');
+}
+function validImport(d){return d&&Array.isArray(d.exercises)&&Array.isArray(d.routines)&&Array.isArray(d.entries)&&Array.isArray(d.meas)}
+
+/* ---------- acties ---------- */
+function saveSet(exId){
+  const d=draftFor(exId);const w=num(d.weight);
+  if(w==null)return toast('Vul een gewicht in (0 mag ook).');
+  D.entries.push({id:rid(),ts:Date.now(),date:today(),exerciseId:exId,weight:w,sets:int(d.sets),reps:int(d.reps),note:String(d.note||'').trim().slice(0,200)});
+  save();delete S.drafts[exId];if(storageOk)toast('Opgeslagen');render();
+}
+document.addEventListener('click',ev=>{
+  const b=ev.target.closest('[data-act]');if(!b||b.disabled)return;
+  const [act,...a]=b.dataset.act.split(':');
+  if(act!=='delRoutine')S.confirmDel=null;
+  if(act!=='wipe')S.confirmWipe=false;
+  if(act==='tab'){S.tab=a[0];render();window.scrollTo(0,0)}
+  else if(act==='routine'){S.routineId=a[0];render()}
+  else if(act==='step'){const d=Object.assign({},draftFor(a[0]));const w=(num(d.weight)||0)+Number(a[1]);d.weight=String(Math.max(0,Math.round(w*100)/100)).replace('.',',');S.drafts[a[0]]=d;render()}
+  else if(act==='save')saveSet(a[0]);
+  else if(act==='hist'){S.hist[a[0]]=!S.hist[a[0]];render()}
+  else if(act==='delEntry'){const e=D.entries.find(x=>x.id===a[0]);D.entries=D.entries.filter(x=>x.id!==a[0]);if(e)delete S.drafts[e.exerciseId];save();toast('Verwijderd');render()}
+  else if(act==='newRoutine'){const n=$('#nr-name').value.trim();if(!n)return toast('Geef het schema een naam.');const r={id:rid(),name:n.slice(0,40),exercises:[]};D.routines.push(r);S.routineId=r.id;save();render()}
+  else if(act==='delRoutine'){if(S.confirmDel!==a[0]){S.confirmDel=a[0];return render()}S.confirmDel=null;D.routines=D.routines.filter(r=>r.id!==a[0]);save();render()}
+  else if(act==='mv'){const r=D.routines.find(x=>x.id===a[0]);const i=+a[1],j=i+(+a[2]);if(!r||j<0||j>=r.exercises.length)return;[r.exercises[i],r.exercises[j]]=[r.exercises[j],r.exercises[i]];save();render()}
+  else if(act==='rm'){const r=D.routines.find(x=>x.id===a[0]);if(!r)return;r.exercises.splice(+a[1],1);save();render()}
+  else if(act==='addEx'){
+    const n=S.newEx.name.trim();if(!n)return toast('Vul een naam in.');
+    if(D.exercises.some(e=>e.name.toLowerCase()===n.toLowerCase()))return toast('Die oefening staat er al.');
+    D.exercises.push({id:rid(),name:n.slice(0,50),group:S.newEx.group});S.newEx={name:'',group:S.newEx.group};save();toast('Oefening toegevoegd');render();
+  }
+  else if(act==='metric'){S.metric=a[0];render()}
+  else if(act==='saveMeas'){
+    const md=S.mDraft;const o={id:rid(),date:md.date||today(),ts:Date.now()};let any=false;
+    METRICS.filter(x=>!x.computed).forEach(x=>{const v=num(md[x.k]);o[x.k]=v;if(v!=null)any=true});
+    if(!any)return toast('Vul minstens één waarde in.');
+    D.meas.push(o);save();S.mDraft={date:today()};toast('Meting opgeslagen');render();
+  }
+  else if(act==='delMeas'){D.meas=D.meas.filter(m=>m.id!==a[0]);save();toast('Meting verwijderd');render()}
+  else if(act==='exportJson')exportJson();
+  else if(act==='exportCsv')exportCsv();
+  else if(act==='importPick'){$('#importFile').value='';$('#importFile').click()}
+  else if(act==='importCancel'){S.pendingImport=null;render()}
+  else if(act==='importConfirm'){D=Object.assign(fresh(),S.pendingImport);S.pendingImport=null;S.drafts={};S.hist={};save();toast('Back-up teruggezet');render()}
+  else if(act==='wipe'){if(!S.confirmWipe){S.confirmWipe=true;return render()}S.confirmWipe=false;D=fresh();S.drafts={};S.hist={};save();toast('Alles gewist');render()}
+});
+document.addEventListener('input',ev=>{
+  const t=ev.target;
+  if(t.dataset.draft){const [id,f]=t.dataset.draft.split('|');const d=Object.assign({},draftFor(id));d[f]=t.value;S.drafts[id]=d}
+  else if(t.dataset.m){S.mDraft[t.dataset.m]=t.value}
+  else if(t.dataset.newex==='name'){S.newEx.name=t.value}
+});
+document.addEventListener('change',ev=>{
+  const t=ev.target;
+  if(t.id==='importFile'){
+    const f=t.files&&t.files[0];if(!f)return;
+    f.text().then(txt=>{const d=JSON.parse(txt);if(!validImport(d))throw new Error('x');S.pendingImport=d;render()}).catch(()=>toast('Dit is geen geldig Gymlog-back-upbestand.'));
+  }
+  else if(t.dataset.addto&&t.value){const r=D.routines.find(x=>x.id===t.dataset.addto);if(r&&!r.exercises.includes(t.value)){r.exercises.push(t.value);save();render()}else{t.value='';toast('Staat al in dit schema.')}}
+  else if(t.dataset.rname){const n=t.value.trim();const r=D.routines.find(x=>x.id===t.dataset.rname);if(!n||!r)return render();r.name=n.slice(0,40);save();render()}
+  else if(t.dataset.newex==='group'){S.newEx.group=t.value}
+  else if(t.dataset.height){D.height=num(t.value);save();toast('Lengte opgeslagen');render()}
+});
+
+render();
+if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+})();
+</script>
+</body>
+</html>
