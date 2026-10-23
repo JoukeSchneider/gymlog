@@ -101,7 +101,8 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .tablewrap{overflow-x:auto;margin-top:8px}
 table{border-collapse:collapse;width:100%;font-size:.92rem;font-variant-numeric:tabular-nums}
 th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
-th:first-child,td:first-child{text-align:left}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+td.del{position:sticky;left:0;background:var(--bg);padding-left:0;width:1%}
 th{font-weight:600;color:var(--muted)}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(72px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:4px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9;max-width:90vw;text-align:center}
@@ -304,8 +305,8 @@ function vMeas(){
     +'</div><p style="margin-top:12px"><button class="btn" data-act="saveMeas">Meting opslaan</button></p></div>';
   h+='<div class="panel"><label class="f" style="max-width:200px">Lengte (cm), voor BMI<input id="p-height" inputmode="numeric" data-height="1" value="'+esc(D.height||'')+'"></label></div>';
   if(rows.length){
-    h+='<h2>Alle metingen</h2><div class="tablewrap"><table><thead><tr><th>Datum</th>'+METRICS.map(x=>'<th>'+x.l+'</th>').join('')+'<th></th></tr></thead><tbody>'
-      +rows.slice().reverse().map(r=>'<tr><td>'+fmtDate(r.date)+' '+r.date.slice(0,4)+'</td>'+METRICS.map(x=>'<td>'+fmtN(r[x.k])+'</td>').join('')+'<td><button class="link" data-act="delMeas:'+esc(r.id)+'">Verwijderen</button></td></tr>').join('')
+    h+='<h2>Alle metingen</h2><p class="muted small">Tik op × om een meting te verwijderen.</p><div class="tablewrap"><table><thead><tr><th></th><th>Datum</th>'+METRICS.map(x=>'<th>'+x.l+'</th>').join('')+'</tr></thead><tbody>'
+      +rows.slice().reverse().map(r=>{const c=S.confirmMeas===r.id;return '<tr><td class="del"><button class="'+(c?'btn danger sm':'ib')+'" aria-label="Meting van '+fmtDate(r.date)+' verwijderen" data-act="delMeas:'+esc(r.id)+'">'+(c?'Wissen?':'×')+'</button></td><td>'+fmtDate(r.date)+' '+r.date.slice(0,4)+'</td>'+METRICS.map(x=>'<td>'+fmtN(r[x.k])+'</td>').join('')+'</tr>'}).join('')
       +'</tbody></table></div>';
   }
   return h;
@@ -447,6 +448,7 @@ document.addEventListener('click',ev=>{
   const [act,...a]=b.dataset.act.split(':');
   if(act!=='delRoutine')S.confirmDel=null;
   if(act!=='wipe')S.confirmWipe=false;
+  if(act!=='delMeas')S.confirmMeas=null;
   if(act==='tab'){S.tab=a[0];render();window.scrollTo(0,0)}
   else if(act==='routine'){S.routineId=a[0];render()}
   else if(act==='step'){const d=Object.assign({},draftFor(a[0]));const w=(num(d.weight)||0)+Number(a[1]);d.weight=String(Math.max(0,Math.round(w*100)/100)).replace('.',',');S.drafts[a[0]]=d;render()}
@@ -469,7 +471,7 @@ document.addEventListener('click',ev=>{
     if(!any)return toast('Vul minstens één waarde in.');
     D.meas.push(o);save();S.mDraft={date:today()};S.ocrNote='';toast('Meting opgeslagen');render();
   }
-  else if(act==='delMeas'){D.meas=D.meas.filter(m=>m.id!==a[0]);save();toast('Meting verwijderd');render()}
+  else if(act==='delMeas'){if(S.confirmMeas!==a[0]){S.confirmMeas=a[0];return render()}S.confirmMeas=null;D.meas=D.meas.filter(m=>m.id!==a[0]);save();toast('Meting verwijderd');render()}
   else if(act==='exportJson')exportJson();
   else if(act==='exportCsv')exportCsv();
   else if(act==='photoPick'){$('#photoFile').value='';$('#photoFile').click()}
