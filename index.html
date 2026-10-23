@@ -70,6 +70,9 @@ input[type=date]{-webkit-appearance:none;appearance:none;display:block;text-alig
 input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
 input[type=date]::-webkit-calendar-picker-indicator{opacity:.6}
 label.f.full{grid-column:1/-1}
+.wdate{display:flex;gap:10px;align-items:flex-end;margin:4px 0 8px}
+.wdate label.f{max-width:220px;flex:1}
+.past{background:var(--warn);color:var(--warn-ink);border-radius:6px;padding:8px 12px;margin:0 0 8px;font-size:.93rem}
 label.f.full input[type=date]{max-width:220px}
 .stepper{display:flex}
 .stepper input{text-align:center;border-radius:0;border-left:0;border-right:0}
@@ -123,7 +126,7 @@ th{font-weight:600;color:var(--muted)}
 </header>
 <main id="main"></main>
 <nav class="tabs" aria-label="Onderdelen">
-  <button data-act="tab:vandaag">Vandaag</button>
+  <button data-act="tab:workout">Workout</button>
   <button data-act="tab:schemas">Schema’s</button>
   <button data-act="tab:metingen">Metingen</button>
   <button data-act="tab:backup">Back-up</button>
@@ -159,7 +162,7 @@ const METRICS=[
   {k:'waist',l:'Buikomtrek',u:'cm',lowerBetter:true},
   {k:'bmi',l:'BMI',u:'',lowerBetter:true,computed:true}
 ];
-const TABS=['vandaag','schemas','metingen','backup'];
+const TABS=['workout','schemas','metingen','backup'];
 
 function pad(n){return String(n).padStart(2,'0')}
 function today(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
@@ -182,7 +185,7 @@ function save(){
 }
 if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{})}
 
-const S={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'vandaag',routineId:null,drafts:{},hist:{},
+const S={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'workout',wDate:today(),routineId:null,drafts:{},hist:{},
   mDraft:{date:today()},metric:'weight',newEx:{name:'',group:'Borst'},confirmDel:null,pendingImport:null,confirmWipe:false};
 
 const $=s=>document.querySelector(s);
@@ -192,8 +195,11 @@ function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show')
 
 function exById(id){return D.exercises.find(e=>e.id===id)}
 function plate(ex){return GROUPS[ex&&ex.group]||'#6B7682'}
-function entriesFor(exId){return D.entries.filter(e=>e.exerciseId===exId).sort((a,b)=>b.ts-a.ts)}
-function lastFor(exId){return entriesFor(exId)[0]||null}
+function byNewest(a,b){return a.date===b.date?b.ts-a.ts:(a.date<b.date?1:-1)}
+function entriesFor(exId){return D.entries.filter(e=>e.exerciseId===exId).sort(byNewest)}
+function dayEntry(exId,date){return entriesFor(exId).find(e=>e.date===date)||null}
+function prevFor(exId,date){return entriesFor(exId).find(e=>e.date<date)||null}
+function dayLabel(date){if(date===today())return 'vandaag';return new Date(date+'T12:00:00').toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})}
 
 /* ---------- render ---------- */
 function render(){
@@ -223,37 +229,40 @@ function vToday(){
   const rs=D.routines;
   let h=backupBanner();
   if(!rs.length)return h+empty('Nog geen schema','Maak een schema met de oefeningen die je doet. Daarna staat hier bij elk bezoek je vorige gewicht klaar.','Schema maken','tab:schemas');
+  const isToday=S.wDate===today();
+  h+='<div class="wdate"><label class="f">Datum workout<input type="date" id="w-date" data-wdate="1" max="'+today()+'" value="'+esc(S.wDate)+'"></label>'+(isToday?'':'<button class="btn ghost sm" data-act="wToday">Naar vandaag</button>')+'</div>';
+  if(!isToday)h+='<p class="past">Je bewerkt de workout van '+esc(dayLabel(S.wDate))+'.</p>';
   const r=rs.find(x=>x.id===S.routineId)||rs[0];S.routineId=r.id;
   h+='<div class="chips" role="group" aria-label="Schema">'+rs.map(x=>'<button class="chip" aria-pressed="'+(x.id===r.id)+'" data-act="routine:'+esc(x.id)+'">'+esc(x.name)+'</button>').join('')+'</div>';
   if(!r.exercises.length)return h+empty('Dit schema is leeg','Voeg oefeningen toe bij Schema’s.','Oefeningen toevoegen','tab:schemas');
-  const doneN=r.exercises.filter(id=>{const l=lastFor(id);return l&&l.date===today()}).length;
-  h+='<p class="muted small">'+doneN+' van '+r.exercises.length+' gedaan vandaag</p>';
+  const doneN=r.exercises.filter(id=>dayEntry(id,S.wDate)).length;
+  h+='<p class="muted small">'+doneN+' van '+r.exercises.length+' gedaan '+(isToday?'vandaag':'op deze dag')+'</p>';
   return h+r.exercises.map(card).join('');
 }
 function draftFor(exId){
   if(S.drafts[exId])return S.drafts[exId];
-  const l=lastFor(exId);
+  const l=dayEntry(exId,S.wDate)||prevFor(exId,S.wDate);
   return {weight:l&&l.weight!=null?String(l.weight).replace('.',','):'',sets:l&&l.sets!=null?l.sets:3,reps:l&&l.reps!=null?l.reps:10,note:l&&l.note||''};
 }
 function card(exId){
   const ex=exById(exId);if(!ex)return '';
-  const l=lastFor(exId);const d=draftFor(exId);const done=l&&l.date===today();const id=esc(exId);
+  const de=dayEntry(exId,S.wDate);const l=prevFor(exId,S.wDate);const d=draftFor(exId);const id=esc(exId);
   let h='<section class="ex" style="--plate:'+plate(ex)+'">';
-  h+='<div class="ex-head"><div><div class="ex-name">'+esc(ex.name)+'</div><div class="group">'+esc(ex.group||'')+'</div></div>'+(done?'<span class="done-tag">✓ Gedaan</span>':'')+'</div>';
+  h+='<div class="ex-head"><div><div class="ex-name">'+esc(ex.name)+'</div><div class="group">'+esc(ex.group||'')+'</div></div>'+(de?'<span class="done-tag">✓ Gedaan</span>':'')+'</div>';
   if(l){
-    h+='<div class="last"><span class="big">'+fmtN(l.weight)+'<span class="u">kg</span></span>'+(l.sets||l.reps?'<span class="sr">'+(l.sets||'?')+' × '+(l.reps||'?')+'</span>':'')+'<span class="muted small">'+(done?'vandaag':'laatst '+fmtDate(l.date))+'</span></div>';
+    h+='<div class="last"><span class="big">'+fmtN(l.weight)+'<span class="u">kg</span></span>'+(l.sets||l.reps?'<span class="sr">'+(l.sets||'?')+' × '+(l.reps||'?')+'</span>':'')+'<span class="muted small">vorige keer, '+fmtDate(l.date)+'</span></div>';
     if(l.note)h+='<div class="note">'+esc(l.note)+'</div>';
-  }else h+='<div class="last"><span class="big none">Nog niet gedaan</span></div>';
+  }else h+='<div class="last"><span class="big none">Geen eerdere keer</span></div>';
   h+='<div class="log">'
     +'<label class="f w">Gewicht (kg)<div class="stepper"><button type="button" aria-label="2,5 kg minder" data-act="step:'+id+':-2.5">−</button><input id="w-'+id+'" inputmode="decimal" data-draft="'+id+'|weight" value="'+esc(d.weight)+'"><button type="button" aria-label="2,5 kg meer" data-act="step:'+id+':2.5">+</button></div></label>'
     +'<label class="f n">Sets<input id="s-'+id+'" inputmode="numeric" data-draft="'+id+'|sets" value="'+esc(d.sets)+'"></label>'
     +'<label class="f n">Reps<input id="r-'+id+'" inputmode="numeric" data-draft="'+id+'|reps" value="'+esc(d.reps)+'"></label>'
     +'</div>';
-  h+='<div class="log2"><input id="n-'+id+'" aria-label="Bijzonderheden" placeholder="Bijzonderheden, bijv. stoel stand 4" data-draft="'+id+'|note" value="'+esc(d.note)+'"><button class="btn" data-act="save:'+id+'">Opslaan</button></div>';
+  h+='<div class="log2"><input id="n-'+id+'" aria-label="Bijzonderheden" placeholder="Bijzonderheden, bijv. stoel stand 4" data-draft="'+id+'|note" value="'+esc(d.note)+'"><button class="btn'+(de?' ghost':'')+'" data-act="save:'+id+'">'+(de?'Bijwerken':'Opslaan')+'</button></div>';
   h+='<div style="margin-top:8px"><button class="link" data-act="hist:'+id+'">'+(S.hist[exId]?'Historie verbergen':'Historie')+'</button></div>';
   if(S.hist[exId]){
     const hs=entriesFor(exId).slice(0,10);
-    h+='<div class="hist">'+(hs.length?hs.map(e=>'<div class="hrow"><span class="muted">'+fmtDate(e.date)+'</span><span><b>'+fmtN(e.weight)+' kg</b>'+(e.sets||e.reps?' '+(e.sets||'?')+' × '+(e.reps||'?'):'')+(e.note?'<br><span class="muted">'+esc(e.note)+'</span>':'')+'</span><button class="x" aria-label="Verwijderen" data-act="delEntry:'+esc(e.id)+'">×</button></div>').join(''):'<p class="muted small">Nog geen historie.</p>')+'</div>';
+    h+='<div class="hist">'+(hs.length?hs.map(e=>'<div class="hrow"><button class="link" data-act="gotoDate:'+esc(e.date)+'" aria-label="Workout van '+fmtDate(e.date)+' openen">'+fmtDate(e.date)+'</button><span><b>'+fmtN(e.weight)+' kg</b>'+(e.sets||e.reps?' '+(e.sets||'?')+' × '+(e.reps||'?'):'')+(e.note?'<br><span class="muted">'+esc(e.note)+'</span>':'')+'</span><button class="x" aria-label="Verwijderen" data-act="delEntry:'+esc(e.id)+'">×</button></div>').join('')+'<p class="muted small">Tik op een datum om die workout te openen.</p>':'<p class="muted small">Nog geen historie.</p>')+'</div>';
   }
   return h+'</section>';
 }
@@ -446,8 +455,11 @@ async function readReceipt(file){
 function saveSet(exId){
   const d=draftFor(exId);const w=num(d.weight);
   if(w==null)return toast('Vul een gewicht in (0 mag ook).');
-  D.entries.push({id:rid(),ts:Date.now(),date:today(),exerciseId:exId,weight:w,sets:int(d.sets),reps:int(d.reps),note:String(d.note||'').trim().slice(0,200)});
-  save();delete S.drafts[exId];if(storageOk)toast('Opgeslagen');render();
+  const vals={weight:w,sets:int(d.sets),reps:int(d.reps),note:String(d.note||'').trim().slice(0,200)};
+  const de=dayEntry(exId,S.wDate);
+  if(de)Object.assign(de,vals);
+  else D.entries.push(Object.assign({id:rid(),ts:Date.now(),date:S.wDate,exerciseId:exId},vals));
+  save();delete S.drafts[exId];if(storageOk)toast(de?'Bijgewerkt':'Opgeslagen');render();
 }
 document.addEventListener('click',ev=>{
   const b=ev.target.closest('[data-act]');if(!b||b.disabled)return;
@@ -457,6 +469,8 @@ document.addEventListener('click',ev=>{
   if(act!=='delMeas')S.confirmMeas=null;
   if(act==='tab'){S.tab=a[0];render();window.scrollTo(0,0)}
   else if(act==='routine'){S.routineId=a[0];render()}
+  else if(act==='wToday'){S.wDate=today();S.drafts={};render()}
+  else if(act==='gotoDate'){S.wDate=a[0];S.drafts={};S.hist={};render();window.scrollTo(0,0)}
   else if(act==='step'){const d=Object.assign({},draftFor(a[0]));const w=(num(d.weight)||0)+Number(a[1]);d.weight=String(Math.max(0,Math.round(w*100)/100)).replace('.',',');S.drafts[a[0]]=d;render()}
   else if(act==='save')saveSet(a[0]);
   else if(act==='hist'){S.hist[a[0]]=!S.hist[a[0]];render()}
@@ -502,6 +516,7 @@ document.addEventListener('change',ev=>{
   else if(t.dataset.addto&&t.value){const r=D.routines.find(x=>x.id===t.dataset.addto);if(r&&!r.exercises.includes(t.value)){r.exercises.push(t.value);save();render()}else{t.value='';toast('Staat al in dit schema.')}}
   else if(t.dataset.rname){const n=t.value.trim();const r=D.routines.find(x=>x.id===t.dataset.rname);if(!n||!r)return render();r.name=n.slice(0,40);save();render()}
   else if(t.dataset.newex==='group'){S.newEx.group=t.value}
+  else if(t.dataset.wdate){const v=t.value;if(!v||v>today()){t.value=S.wDate;return toast('Kies een datum tot en met vandaag.')}S.wDate=v;S.drafts={};render()}
   else if(t.dataset.height){D.height=num(t.value);save();toast('Lengte opgeslagen');render()}
 });
 
