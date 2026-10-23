@@ -145,8 +145,9 @@ const DEFAULT_EX=[
   ['squat','Squat','Benen'],['leg-press','Leg press','Benen'],['leg-extension','Leg extension','Benen'],['leg-curl','Leg curl','Benen'],['lunges','Lunges','Benen'],['calf-raise','Calf raise','Benen'],
   ['shoulder-press','Shoulder press','Schouders'],['lateral-raise','Lateral raise','Schouders'],
   ['biceps-curl','Biceps curl','Armen'],['triceps-pushdown','Triceps pushdown','Armen'],
-  ['plank','Plank','Core'],['crunch-machine','Crunch (machine)','Core'],
-  ['treadmill','Loopband','Cardio'],['rowing','Roeitrainer','Cardio']
+  ['plank','Plank','Core'],['crunch-machine','Crunch (machine)','Core'],['crunch-bench','Crunch (bank)','Core'],
+  ['treadmill','Loopband','Cardio'],['rowing','Roeitrainer','Cardio'],['crosstrainer','Crosstrainer','Cardio'],
+  ['bent-over-row','Bend over row (halter)','Rug'],['arm-curl-db','Arm curl (halter)','Armen']
 ].map(([id,name,group])=>({id,name,group}));
 const METRICS=[
   {k:'weight',l:'Gewicht',u:'kg',lowerBetter:true},
@@ -179,6 +180,12 @@ function fresh(){return {v:1,exercises:DEFAULT_EX.slice(),routines:[],entries:[]
 function load(){try{const s=localStorage.getItem(KEY);if(s){const d=JSON.parse(s);return Object.assign(fresh(),d)}}catch(e){}return fresh()}
 let D=load();
 let storageOk=true;
+// Nieuwe standaardoefeningen toevoegen aan een bestaande lijst (zonder iets te overschrijven)
+(function addMissingDefaults(){
+  let added=false;
+  DEFAULT_EX.forEach(e=>{if(!D.exercises.some(x=>x.id===e.id||x.name.toLowerCase()===e.name.toLowerCase())){D.exercises.push(Object.assign({},e));added=true}});
+  if(added)try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}
+})();
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify(D));storageOk=true}
   catch(e){storageOk=false;toast('Opslaan op dit toestel lukt niet. Is de opslag vol of staat privémodus aan?')}
