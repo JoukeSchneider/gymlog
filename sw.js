@@ -1,6 +1,6 @@
 // Gymlog service worker: maakt de app offline bruikbaar.
 // Verhoog VERSION na elke wijziging, dan haalt de telefoon de nieuwe versie op.
-const VERSION = 'gymlog-v3';
+const VERSION = 'gymlog-v4';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
