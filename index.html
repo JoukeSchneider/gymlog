@@ -122,6 +122,7 @@ th{font-weight:600;color:var(--muted)}
   <button data-act="tab:backup">Back-up</button>
 </nav>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
+<input type="file" id="photoFile" accept="image/*" hidden>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -140,9 +141,14 @@ const DEFAULT_EX=[
 const METRICS=[
   {k:'weight',l:'Gewicht',u:'kg',lowerBetter:true},
   {k:'fat',l:'Vetpercentage',u:'%',lowerBetter:true},
+  {k:'fatMass',l:'Vetmassa',u:'kg',lowerBetter:true},
+  {k:'ffm',l:'Vetvrije massa',u:'kg',lowerBetter:false},
   {k:'muscle',l:'Spiermassa',u:'kg',lowerBetter:false},
+  {k:'waterPct',l:'Lichaamsvocht',u:'%',lowerBetter:false},
+  {k:'bone',l:'Botmassa',u:'kg',lowerBetter:false},
   {k:'visceral',l:'Visceraal vet',u:'',lowerBetter:true},
   {k:'metaAge',l:'Metabole leeftijd',u:'jr',lowerBetter:true},
+  {k:'bmr',l:'BMR',u:'kcal',lowerBetter:false},
   {k:'waist',l:'Buikomtrek',u:'cm',lowerBetter:true},
   {k:'bmi',l:'BMI',u:'',lowerBetter:true,computed:true}
 ];
@@ -289,7 +295,10 @@ function vMeas(){
       h+='</div>'+chart(pts,met);
     }else h+='<p class="muted">Nog geen waarden voor '+met.l.toLowerCase()+'.</p>';
   }
-  h+='<div class="panel"><h3>Nieuwe meting</h3><div class="grid2" style="margin-top:10px">'
+  h+='<div class="panel"><h3>Nieuwe meting</h3>'
+    +'<div class="btnrow"><button class="btn ghost" data-act="photoPick"'+(S.ocrBusy?' disabled':'')+'>'+(S.ocrBusy?esc(S.ocrBusy):'Foto van Tanita-bon')+'</button></div>'
+    +(S.ocrNote?'<div class="banner" style="margin-top:10px"><span>'+esc(S.ocrNote)+'</span></div>':'')
+    +'<div class="grid2" style="margin-top:10px">'
     +'<label class="f">Datum<input type="date" id="m-date" data-m="date" value="'+esc(md.date||today())+'"></label>'
     +METRICS.filter(x=>!x.computed).map(x=>'<label class="f">'+x.l+(x.u?' ('+x.u+')':'')+'<input id="m-'+x.k+'" inputmode="decimal" data-m="'+x.k+'" value="'+esc(md[x.k]||'')+'"></label>').join('')
     +'</div><p style="margin-top:12px"><button class="btn" data-act="saveMeas">Meting opslaan</button></p></div>';
@@ -356,6 +365,76 @@ async function exportCsv(){
 }
 function validImport(d){return d&&Array.isArray(d.exercises)&&Array.isArray(d.routines)&&Array.isArray(d.entries)&&Array.isArray(d.meas)}
 
+
+/* ---------- Tanita-bon lezen (tekstherkenning draait op het toestel) ---------- */
+const OCR_LABELS={weight:'gewicht',fat:'vetpercentage',fatMass:'vetmassa',ffm:'vetvrije massa',muscle:'spiermassa',waterPct:'lichaamsvocht %',bone:'botmassa',visceral:'visceraal vet',metaAge:'metabole leeftijd',bmr:'BMR'};
+function parseTanita(raw){
+  const MON={JAN:1,FEB:2,MAR:3,MRT:3,APR:4,MAY:5,MEI:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,OKT:10,NOV:11,DEC:12};
+  const lines=raw.toUpperCase().split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  const out={};
+  const lab=s=>s.replace(/[^A-Z0-9%]/g,'').replace(/1/g,'I').replace(/0/g,'O');
+  const numOf=s=>{const m=s.match(/(\d{1,3})\s*[.,]\s*(\d)(?!\d)/);if(m)return Number(m[1]+'.'+m[2]);const n=s.match(/(?:^|[^\d])(\d{1,3})(?![\d.,])/);return n?Number(n[1]):null};
+  const inR=(v,a,b)=>v!=null&&v>=a&&v<=b?v:null;
+  for(const l of lines){const m=l.replace(/\s/g,'').match(/(\d{1,2})\/([A-Z]{3})\/(\d{4})/);if(m&&MON[m[2]]){out.date=m[3]+'-'+String(MON[m[2]]).padStart(2,'0')+'-'+m[1].padStart(2,'0');break}}
+  for(const l of lines){if(lab(l).includes('LENGTE')){out.height=inR(numOf(l),120,230);break}}
+  let start=lines.findIndex(l=>{const L=lab(l);return L.includes('GEWICHT')&&!L.includes('KLED')&&!L.includes('KLEO')});
+  if(start<0)start=0;
+  let end=lines.findIndex((l,i)=>i>start&&/IDEA|WAARDEN/.test(lab(l)));if(end<0)end=lines.length;
+  const R=lines.slice(start,end);let afterVisc=false;
+  for(let i=0;i<R.length;i++){
+    const l=R[i],L=lab(l),v=numOf(l.replace(/^[^A-Z]*[A-Z %]+/,''));
+    if(L.includes('GEWICHT'))out.weight=inR(v,30,300);
+    else if(L.includes('PERCENT'))out.fat=inR(v,2,70);
+    else if(L.includes('VRIJE'))out.ffm=inR(v,20,200);
+    else if(L.includes('VETMAS'))out.fatMass=inR(v,1,150);
+    else if(L.includes('PIERMAS'))out.muscle=inR(v,15,180);
+    else if(L.includes('VOCHT')&&L.includes('%'))out.waterPct=inR(v,30,80);
+    else if(L.includes('BOTMAS'))out.bone=inR(v,1,10);
+    else if(/KCA/.test(L)){const m=l.replace(/\s/g,'').match(/(\d{3,5})KCA/i);if(m)out.bmr=inR(Number(m[1]),800,5000)}
+    else if(L.includes('METABOL')){let x=v;if(x==null&&R[i+1])x=numOf(R[i+1]);out.metaAge=inR(x,12,99)}
+    else if(L.includes('VISCER')){out.visceral=inR(v,1,59);afterVisc=true}
+  }
+  return out;
+}
+function loadScript(src){return new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+async function prepImage(file){
+  const bmp=await createImageBitmap(file);
+  const long=Math.max(bmp.width,bmp.height);const sc=Math.min(2,2200/long);
+  const c=document.createElement('canvas');c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);
+  const g=c.getContext('2d');g.drawImage(bmp,0,0,c.width,c.height);
+  const img=g.getImageData(0,0,c.width,c.height),d=img.data,hist=new Array(256).fill(0);
+  for(let i=0;i<d.length;i+=4){const y=Math.round(.299*d[i]+.587*d[i+1]+.114*d[i+2]);d[i]=y;hist[y]++}
+  const n=d.length/4;let acc=0,lo=0,hi=255;
+  for(let i=0;i<256;i++){acc+=hist[i];if(acc>n*.02){lo=i;break}}
+  acc=0;for(let i=255;i>=0;i--){acc+=hist[i];if(acc>n*.02){hi=i;break}}
+  const k=255/Math.max(1,hi-lo);
+  for(let i=0;i<d.length;i+=4){const y=Math.max(0,Math.min(255,(d[i]-lo)*k));d[i]=d[i+1]=d[i+2]=y}
+  g.putImageData(img,0,0);return c;
+}
+async function readReceipt(file){
+  S.ocrBusy='Bon lezen…';S.ocrNote='';render();
+  try{
+    if(!window.Tesseract){S.ocrBusy='Tekstherkenning laden…';render();await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js')}
+    const canvas=await prepImage(file);
+    const worker=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text'){const p=Math.round(m.progress*100);if(S.ocrBusy!=='Bon lezen… '+p+'%'){S.ocrBusy='Bon lezen… '+p+'%';render()}}}});
+    await worker.setParameters({tessedit_pageseg_mode:'6'});
+    const {data:{text}}=await worker.recognize(canvas);
+    await worker.terminate();
+    const r=parseTanita(text);
+    const found=Object.keys(OCR_LABELS).filter(k=>r[k]!=null);
+    if(!found.length){S.ocrNote='Op deze foto kon ik geen waarden lezen. Probeer een scherpe foto, recht van boven, zonder schaduw.';return}
+    const md={date:r.date||today()};
+    found.forEach(k=>{md[k]=String(r[k]).replace('.',',')});
+    if(S.mDraft.waist)md.waist=S.mDraft.waist;
+    S.mDraft=md;
+    if(r.height&&!num(D.height)){D.height=r.height;save()}
+    const miss=Object.keys(OCR_LABELS).filter(k=>r[k]==null).map(k=>OCR_LABELS[k]);
+    S.ocrNote=found.length+' waarden van de bon gelezen. Controleer ze voor je opslaat.'+(miss.length?' Niet gelezen, vul zelf in: '+miss.join(', ')+'.':'');
+  }catch(e){
+    S.ocrNote='De bon lezen lukte niet. Voor de eerste keer is internet nodig om de tekstherkenning te laden.';
+  }finally{S.ocrBusy=null;render()}
+}
+
 /* ---------- acties ---------- */
 function saveSet(exId){
   const d=draftFor(exId);const w=num(d.weight);
@@ -388,11 +467,12 @@ document.addEventListener('click',ev=>{
     const md=S.mDraft;const o={id:rid(),date:md.date||today(),ts:Date.now()};let any=false;
     METRICS.filter(x=>!x.computed).forEach(x=>{const v=num(md[x.k]);o[x.k]=v;if(v!=null)any=true});
     if(!any)return toast('Vul minstens één waarde in.');
-    D.meas.push(o);save();S.mDraft={date:today()};toast('Meting opgeslagen');render();
+    D.meas.push(o);save();S.mDraft={date:today()};S.ocrNote='';toast('Meting opgeslagen');render();
   }
   else if(act==='delMeas'){D.meas=D.meas.filter(m=>m.id!==a[0]);save();toast('Meting verwijderd');render()}
   else if(act==='exportJson')exportJson();
   else if(act==='exportCsv')exportCsv();
+  else if(act==='photoPick'){$('#photoFile').value='';$('#photoFile').click()}
   else if(act==='importPick'){$('#importFile').value='';$('#importFile').click()}
   else if(act==='importCancel'){S.pendingImport=null;render()}
   else if(act==='importConfirm'){D=Object.assign(fresh(),S.pendingImport);S.pendingImport=null;S.drafts={};S.hist={};save();toast('Back-up teruggezet');render()}
@@ -406,6 +486,7 @@ document.addEventListener('input',ev=>{
 });
 document.addEventListener('change',ev=>{
   const t=ev.target;
+  if(t.id==='photoFile'){const f=t.files&&t.files[0];if(f)readReceipt(f);return}
   if(t.id==='importFile'){
     const f=t.files&&t.files[0];if(!f)return;
     f.text().then(txt=>{const d=JSON.parse(txt);if(!validImport(d))throw new Error('x');S.pendingImport=d;render()}).catch(()=>toast('Dit is geen geldig Gymlog-back-upbestand.'));
