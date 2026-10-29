@@ -70,6 +70,9 @@ input[type=date]{-webkit-appearance:none;appearance:none;display:block;text-alig
 input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
 input[type=date]::-webkit-calendar-picker-indicator{opacity:.6}
 label.f.full{grid-column:1/-1}
+details summary{cursor:pointer;color:var(--accent)}
+input[type=time]{-webkit-appearance:none;appearance:none;display:block;text-align:left}
+input[type=time]::-webkit-date-and-time-value{text-align:left;margin:0}
 .wdate{display:flex;gap:10px;align-items:flex-end;margin:4px 0 8px}
 .wdate label.f{max-width:220px;flex:1}
 .past{background:var(--warn);color:var(--warn-ink);border-radius:6px;padding:8px 12px;margin:0 0 8px;font-size:.93rem}
@@ -129,7 +132,7 @@ th{font-weight:600;color:var(--muted)}
   <button data-act="tab:workout">Workout</button>
   <button data-act="tab:schemas">Schema’s</button>
   <button data-act="tab:metingen">Metingen</button>
-  <button data-act="tab:backup">Back-up</button>
+  <button data-act="tab:backup">Instellingen</button>
 </nav>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <input type="file" id="photoFile" accept="image/*" hidden>
@@ -176,7 +179,7 @@ function rid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function daysSince(iso){if(!iso)return Infinity;return Math.floor((Date.now()-new Date(iso).getTime())/864e5)}
 
 /* ---------- opslag op het toestel ---------- */
-function fresh(){return {v:1,exercises:DEFAULT_EX.slice(),routines:[],entries:[],meas:[],height:null,lastBackup:null}}
+function fresh(){return {v:1,exercises:DEFAULT_EX.slice(),routines:[],entries:[],meas:[],height:null,lastBackup:null,stravaSent:{}}}
 function load(){try{const s=localStorage.getItem(KEY);if(s){const d=JSON.parse(s);return Object.assign(fresh(),d)}}catch(e){}return fresh()}
 let D=load();
 let storageOk=true;
@@ -193,7 +196,7 @@ function save(){
 if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{})}
 
 const S={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'workout',wDate:today(),routineId:null,drafts:{},hist:{},
-  mDraft:{date:today()},metric:'weight',newEx:{name:'',group:'Borst'},confirmDel:null,pendingImport:null,confirmWipe:false};
+  mDraft:{date:today()},metric:'weight',newEx:{name:'',group:'Borst'},confirmDel:null,pendingImport:null,confirmWipe:false,stDraft:{},stBusy:false,stNote:'',stCode:null};
 
 const $=s=>document.querySelector(s);
 document.getElementById('todayLbl').textContent=new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
@@ -244,7 +247,7 @@ function vToday(){
   if(!r.exercises.length)return h+empty('Dit schema is leeg','Voeg oefeningen toe bij Schema’s.','Oefeningen toevoegen','tab:schemas');
   const doneN=r.exercises.filter(id=>dayEntry(id,S.wDate)).length;
   h+='<p class="muted small">'+doneN+' van '+r.exercises.length+' gedaan '+(isToday?'vandaag':'op deze dag')+'</p>';
-  return h+r.exercises.map(card).join('');
+  return h+r.exercises.map(card).join('')+stravaPanel();
 }
 function draftFor(exId){
   if(S.drafts[exId])return S.drafts[exId];
@@ -352,7 +355,7 @@ function chart(pts,met){
 
 /* ---------- Back-up ---------- */
 function vBackup(){
-  let h='<h2>Back-up</h2>';
+  let h=stravaSettings()+'<h2>Back-up</h2>';
   h+='<p class="muted">Al je gegevens staan alleen op dit toestel, in de opslag van deze app. Maak regelmatig een back-up: wis je je browsergegevens of vervang je je telefoon, dan is alles anders weg.</p>';
   h+='<div class="panel"><h3>Back-up maken</h3><p class="small muted">'+(D.lastBackup?'Laatste back-up: '+new Date(D.lastBackup).toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'}):'Nog geen back-up gemaakt.')+'</p>'
     +'<p class="small">Kies in het deelmenu “Bewaar in Bestanden” en daarna de map, bijvoorbeeld iCloud Drive.</p>'
@@ -458,6 +461,121 @@ async function readReceipt(file){
   }finally{S.ocrBusy=null;render()}
 }
 
+
+/* ---------- Strava (sleutels staan alleen op dit toestel, apart van je back-ups) ---------- */
+const SKEY='gymlog-strava';
+let ST=(function(){try{return JSON.parse(localStorage.getItem(SKEY))||{}}catch(e){return {}}})();
+function saveSt(){try{localStorage.setItem(SKEY,JSON.stringify(ST))}catch(e){}}
+function redirectUri(){return location.origin+location.pathname}
+function stConnected(){return !!ST.refreshToken}
+function stErr(e){
+  if(e&&(e.status===401||e.status===400))return 'Strava weigert de toegang. Controleer je gegevens of koppel opnieuw bij Instellingen.';
+  if(e&&e.status===429)return 'Strava: even te veel verzoeken. Probeer het over een kwartier opnieuw.';
+  if(e&&e.status)return 'Strava gaf een foutmelding ('+e.status+').';
+  return 'Strava is niet bereikbaar. Heb je internet?';
+}
+async function stToken(params){
+  const r=await fetch('https://www.strava.com/oauth/token',{method:'POST',body:new URLSearchParams(Object.assign({client_id:ST.clientId,client_secret:ST.clientSecret},params))});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw Object.assign(new Error('token'),{status:r.status});
+  ST.accessToken=j.access_token;if(j.refresh_token)ST.refreshToken=j.refresh_token;ST.expiresAt=j.expires_at;
+  if(j.athlete)ST.athlete=[j.athlete.firstname,j.athlete.lastname].filter(Boolean).join(' ');
+  saveSt();
+}
+async function stAccess(){
+  if(!ST.accessToken||!ST.expiresAt||ST.expiresAt*1000<Date.now()+60000)await stToken({grant_type:'refresh_token',refresh_token:ST.refreshToken});
+  return ST.accessToken;
+}
+async function stApi(method,path,params){
+  const tok=await stAccess();
+  const r=await fetch('https://www.strava.com/api/v3'+path,{method,headers:{Authorization:'Bearer '+tok},body:params?new URLSearchParams(params):undefined});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw Object.assign(new Error('api'),{status:r.status});
+  return j;
+}
+function stConnect(){
+  if(!ST.clientId||!ST.clientSecret)return toast('Vul eerst Client ID en Client Secret in.');
+  location.href='https://www.strava.com/oauth/authorize?'+new URLSearchParams({client_id:ST.clientId,response_type:'code',redirect_uri:redirectUri(),approval_prompt:'auto',scope:'activity:write'});
+}
+async function stExchange(code){
+  S.stBusy=true;S.stCode=null;render();
+  try{await stToken({grant_type:'authorization_code',code});S.stNote='';toast('Strava gekoppeld')}
+  catch(e){S.stNote=stErr(e)}
+  S.stBusy=false;render();
+}
+async function stDisconnect(){
+  try{if(ST.accessToken)await fetch('https://www.strava.com/oauth/deauthorize',{method:'POST',body:new URLSearchParams({access_token:ST.accessToken})})}catch(e){}
+  delete ST.accessToken;delete ST.refreshToken;delete ST.expiresAt;delete ST.athlete;saveSt();toast('Strava ontkoppeld');render();
+}
+function stravaSettings(){
+  let h='<h2>Strava</h2>';
+  if(S.stCode&&!(ST.clientId&&ST.clientSecret)){
+    return h+'<div class="panel"><h3>Bijna klaar</h3><p class="small">Deze pagina is in Safari geopend in plaats van in de app. Kopieer de code, open Gymlog via je beginscherm en plak hem bij Instellingen → Strava → “Code plakken”.</p><input readonly id="st-code-show" value="'+esc(S.stCode)+'"><div class="btnrow"><button class="btn" data-act="stCopy">Code kopiëren</button></div></div>';
+  }
+  if(stConnected()){
+    return h+'<div class="panel"><p>✓ Gekoppeld'+(ST.athlete?' als <b>'+esc(ST.athlete)+'</b>':'')+'.</p><p class="small muted">Onder Workout staat nu per dag een knop om de workout naar Strava te sturen.</p><div class="btnrow"><button class="btn ghost sm" data-act="stDisconnect">Ontkoppelen</button></div></div>';
+  }
+  h+='<div class="panel"><p class="small">Eenmalig instellen. Je sleutels blijven op dit toestel en gaan niet mee in je back-ups.</p>'
+    +'<p class="small"><b>1.</b> Maak op strava.com (Instellingen → Mijn API-applicatie) een applicatie aan. Vul bij “Authorization Callback Domain” in: <b>'+esc(location.hostname||'jouw-naam.github.io')+'</b></p>'
+    +'<p class="small"><b>2.</b> Neem Client ID en Client Secret over:</p>'
+    +'<div class="grid2" style="margin-top:6px"><label class="f">Client ID<input id="st-id" inputmode="numeric" data-stcfg="clientId" value="'+esc(ST.clientId||'')+'"></label><label class="f">Client Secret<input id="st-secret" type="password" autocomplete="off" data-stcfg="clientSecret" value="'+esc(ST.clientSecret||'')+'"></label></div>'
+    +'<p class="small" style="margin-top:10px"><b>3.</b> Geef Gymlog toestemming:</p>'
+    +'<div class="btnrow"><button class="btn" data-act="stConnect"'+(S.stBusy?' disabled':'')+'>'+(S.stBusy?'Bezig…':'Koppel met Strava')+'</button></div>'
+    +(S.stNote?'<p class="small" style="color:var(--danger);margin-top:8px">'+esc(S.stNote)+'</p>':'')
+    +'<details style="margin-top:12px"><summary class="small">Kwam je na het koppelen in Safari uit? Code plakken</summary><div style="display:flex;gap:8px;margin-top:8px"><input id="st-paste" placeholder="Plak hier de code"><button class="btn ghost" data-act="stPaste">Gebruiken</button></div></details>'
+    +'</div>';
+  return h;
+}
+function stDefaults(){
+  const es=D.entries.filter(e=>e.date===S.wDate).sort((a,b)=>a.ts-b.ts);
+  const r=D.routines.find(x=>x.id===S.routineId);
+  let start='18:00';
+  if(S.wDate===today()&&es.length){const t=new Date(es[0].ts-5*60000);start=pad(t.getHours())+':'+pad(t.getMinutes())}
+  return {name:'Krachttraining'+(r?' – '+r.name:''),start,dur:'60'};
+}
+function stDraft(){return Object.assign(stDefaults(),S.stDraft[S.wDate]||{})}
+function stDescription(){
+  const es=D.entries.filter(e=>e.date===S.wDate).sort((a,b)=>a.ts-b.ts);
+  return es.map(e=>{const ex=exById(e.exerciseId);return (ex?ex.name:'Oefening')+': '+fmtN(e.weight)+' kg'+(e.sets||e.reps?', '+(e.sets||'?')+'×'+(e.reps||'?'):'')+(e.note?' ('+e.note+')':'')}).join('\n')+'\n\nGelogd met Gymlog';
+}
+function stravaPanel(){
+  const n=D.entries.filter(e=>e.date===S.wDate).length;if(!n)return '';
+  if(!stConnected())return '<p class="muted small" style="margin-top:18px">Deze workout naar Strava sturen? Koppel Strava bij <button class="link" data-act="tab:backup">Instellingen</button>.</p>';
+  const sent=(D.stravaSent||{})[S.wDate];const d=stDraft();
+  let h='<div class="panel" style="margin-top:18px"><h3>Naar Strava</h3>';
+  if(sent)h+='<p class="small">✓ Staat op Strava. <a href="https://www.strava.com/activities/'+esc(sent)+'" target="_blank" rel="noopener">Bekijken</a></p>';
+  h+='<label class="f" style="margin-top:8px">Titel<input id="st-name" data-st="name" value="'+esc(d.name)+'"></label>';
+  if(!sent)h+='<div class="grid2" style="margin-top:8px"><label class="f">Starttijd<input type="time" id="st-start" data-st="start" value="'+esc(d.start)+'"></label><label class="f">Duur (min)<input id="st-dur" inputmode="numeric" data-st="dur" value="'+esc(d.dur)+'"></label></div>';
+  h+='<p class="small muted" style="margin-top:8px">'+n+' oefening'+(n===1?'':'en')+' gaan mee in de beschrijving.'+(sent?' Bij bijwerken veranderen titel en beschrijving, tijd en duur niet.':'')+'</p>';
+  h+='<div class="btnrow"><button class="btn" data-act="stSend"'+(S.stBusy?' disabled':'')+'>'+(S.stBusy?'Bezig…':(sent?'Strava bijwerken':'Naar Strava'))+'</button></div></div>';
+  return h;
+}
+async function stSend(){
+  const d=stDraft();const date=S.wDate;const sent=(D.stravaSent||{})[date];
+  const name=(d.name||'Krachttraining').trim().slice(0,100);const description=stDescription();
+  S.stBusy=true;render();
+  try{
+    if(sent){
+      try{await stApi('PUT','/activities/'+sent,{name,description});toast('Strava bijgewerkt')}
+      catch(e){if(e.status===404){delete D.stravaSent[date];save();toast('Activiteit niet meer gevonden op Strava. Stuur hem opnieuw.')}else throw e}
+    }else{
+      const dur=int(d.dur);if(!dur||dur<1)throw Object.assign(new Error('x'),{local:'Vul een duur in minuten in.'});
+      if(!/^\d{2}:\d{2}$/.test(d.start||''))throw Object.assign(new Error('x'),{local:'Vul een starttijd in.'});
+      const j=await stApi('POST','/activities',{name,sport_type:'WeightTraining',start_date_local:date+'T'+d.start+':00',elapsed_time:String(dur*60),description});
+      D.stravaSent=D.stravaSent||{};D.stravaSent[date]=String(j.id);save();toast('Op Strava gezet');
+    }
+  }catch(e){toast(e.local||stErr(e))}
+  S.stBusy=false;render();
+}
+(function handleStravaReturn(){
+  const q=new URLSearchParams(location.search);const code=q.get('code'),err=q.get('error');
+  if(!code&&!err)return;
+  history.replaceState(null,'',location.pathname);S.tab='backup';
+  if(err){S.stNote='Koppelen geannuleerd.';return}
+  if(!(q.get('scope')||'').includes('activity:write')){S.stNote='Geef bij het koppelen toestemming om activiteiten aan te maken.';return}
+  if(ST.clientId&&ST.clientSecret)stExchange(code);else S.stCode=code;
+})();
+
 /* ---------- acties ---------- */
 function saveSet(exId){
   const d=draftFor(exId);const w=num(d.weight);
@@ -500,6 +618,11 @@ document.addEventListener('click',ev=>{
   }
   else if(act==='delMeas'){if(S.confirmMeas!==a[0]){S.confirmMeas=a[0];return render()}S.confirmMeas=null;D.meas=D.meas.filter(m=>m.id!==a[0]);save();toast('Meting verwijderd');render()}
   else if(act==='exportJson')exportJson();
+  else if(act==='stConnect')stConnect();
+  else if(act==='stDisconnect')stDisconnect();
+  else if(act==='stSend')stSend();
+  else if(act==='stPaste'){const c=$('#st-paste').value.trim();if(!c)return toast('Plak eerst de code.');if(!ST.clientId||!ST.clientSecret)return toast('Vul eerst Client ID en Client Secret in.');stExchange(c)}
+  else if(act==='stCopy'){const c=S.stCode||'';(navigator.clipboard?navigator.clipboard.writeText(c):Promise.reject()).then(()=>toast('Code gekopieerd')).catch(()=>{const i=$('#st-code-show');i.select();toast('Selecteer en kopieer de code')})}
   else if(act==='exportCsv')exportCsv();
   else if(act==='photoPick'){$('#photoFile').value='';$('#photoFile').click()}
   else if(act==='importPick'){$('#importFile').value='';$('#importFile').click()}
@@ -511,6 +634,8 @@ document.addEventListener('input',ev=>{
   const t=ev.target;
   if(t.dataset.draft){const [id,f]=t.dataset.draft.split('|');const d=Object.assign({},draftFor(id));d[f]=t.value;S.drafts[id]=d}
   else if(t.dataset.m){S.mDraft[t.dataset.m]=t.value}
+  else if(t.dataset.st){S.stDraft[S.wDate]=Object.assign({},S.stDraft[S.wDate]||{},{[t.dataset.st]:t.value})}
+  else if(t.dataset.stcfg){ST[t.dataset.stcfg]=t.value.trim();saveSt()}
   else if(t.dataset.newex==='name'){S.newEx.name=t.value}
 });
 document.addEventListener('change',ev=>{
