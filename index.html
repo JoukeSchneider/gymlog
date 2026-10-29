@@ -493,18 +493,24 @@ async function stApi(method,path,params){
   if(!r.ok)throw Object.assign(new Error('api'),{status:r.status});
   return j;
 }
-function stAuthUrl(){
+function stAuthUrl(forSafari){
   // Op iPhone/iPad de mobiele variant: die opent zo mogelijk de Strava-app, waar je al bent ingelogd.
-  const mobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const mobile=!forSafari&&/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   return 'https://www.strava.com/oauth/'+(mobile?'mobile/':'')+'authorize?'+new URLSearchParams({client_id:ST.clientId,response_type:'code',redirect_uri:redirectUri(),approval_prompt:'auto',scope:'activity:write'});
+}
+function stCheckId(){
+  if(!/^\d{3,10}$/.test(ST.clientId||'')){toast('De Client ID bestaat alleen uit cijfers, bijv. 123456. Controleer wat je hebt geplakt.');return false}
+  return true;
 }
 function stConnect(){
   if(!ST.clientId||!ST.clientSecret)return toast('Vul eerst Client ID en Client Secret in.');
+  if(!stCheckId())return;
   location.href=stAuthUrl();
 }
 function stCopyLink(){
   if(!ST.clientId)return toast('Vul eerst je Client ID in.');
-  const u=stAuthUrl();
+  if(!stCheckId())return;
+  const u=stAuthUrl(true);
   (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('Link gekopieerd. Plak hem in Safari.')).catch(()=>{S.stLink=u;render()});
 }
 async function stExchange(code){
