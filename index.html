@@ -32,8 +32,8 @@
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
-header.top{max-width:640px;margin:0 auto;padding:18px 16px 4px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-h1{font:700 2.3rem/1 "Barlow Condensed","Arial Narrow",sans-serif;margin:0}
+header.top{max-width:640px;margin:0 auto;padding:12px 16px 2px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font:700 1.9rem/1 "Barlow Condensed","Arial Narrow",sans-serif;margin:0}
 .today{color:var(--muted);font-size:.95rem}
 main{max-width:640px;margin:0 auto;padding:8px 16px 120px}
 h2{font:700 1.6rem/1.1 "Barlow Condensed","Arial Narrow",sans-serif;margin:26px 0 10px}
@@ -120,6 +120,35 @@ th{font-weight:600;color:var(--muted)}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(72px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:4px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9;max-width:90vw;text-align:center}
 #toast.show{opacity:1}
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
+/* compacte workout-weergave */
+.wtop{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:end;margin:4px 0 6px}
+.wtop input[type=date]{max-width:170px}
+.ex{padding:10px 12px;margin:8px 0;border-left-width:6px}
+.ex-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ex .ex-name{font-size:1.15rem}
+.prev{font-size:.92rem;margin-top:2px}
+.prev b{font:700 1.2rem/1 "Barlow Condensed","Arial Narrow",sans-serif;font-variant-numeric:tabular-nums}
+.ex .note{margin-top:4px;padding:3px 7px;font-size:.85rem}
+.ex .log{margin-top:8px;gap:6px}
+.ex .log .n{width:52px}
+.ex .log2{margin-top:6px;gap:6px}
+.ex label.f{font-size:.72rem;gap:2px}
+.ex input{min-height:38px;padding:5px 7px;font-size:16px}
+.ex .stepper button{width:34px;font-size:1.05rem}
+.ex .btn{padding:7px 12px;font-size:.95rem}
+.ex .hist{margin-top:6px}
+.ex .hrow{font-size:.85rem;padding:3px 0}
+.ex.done{padding:8px 12px}
+.exrow{display:flex;gap:8px;align-items:baseline;width:100%;background:none;border:0;padding:0;color:inherit;text-align:left;cursor:pointer;font:inherit}
+.exrow .ex-name{flex:1;min-width:0}
+.done-sum{color:var(--ok);font-weight:600;font-size:.9rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+.edit{color:var(--accent);font-size:.85rem}
+.count{margin:2px 0 0}
+.opts{margin-top:10px}
+.opt{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:.95rem;cursor:pointer}
+.opt input{width:20px;height:20px;min-height:0;flex:none;accent-color:var(--accent);margin:0}
+.opt.off{opacity:.45}
+.preview{white-space:pre-wrap;font:400 .85rem/1.4 "Barlow",system-ui,sans-serif;background:var(--soft);border-radius:4px;padding:8px 10px;margin:8px 0 0;max-height:180px;overflow:auto}
 </style>
 </head>
 <body>
@@ -179,7 +208,7 @@ function rid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function daysSince(iso){if(!iso)return Infinity;return Math.floor((Date.now()-new Date(iso).getTime())/864e5)}
 
 /* ---------- opslag op het toestel ---------- */
-function fresh(){return {v:1,exercises:DEFAULT_EX.slice(),routines:[],entries:[],meas:[],height:null,lastBackup:null,stravaSent:{}}}
+function fresh(){return {v:1,exercises:DEFAULT_EX.slice(),routines:[],entries:[],meas:[],height:null,lastBackup:null,stravaSent:{},meta:{},lastGym:null}}
 function load(){try{const s=localStorage.getItem(KEY);if(s){const d=JSON.parse(s);return Object.assign(fresh(),d)}}catch(e){}return fresh()}
 let D=load();
 let storageOk=true;
@@ -196,7 +225,7 @@ function save(){
 if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{})}
 
 const S={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'workout',wDate:today(),routineId:null,drafts:{},hist:{},
-  mDraft:{date:today()},metric:'weight',newEx:{name:'',group:'Borst'},confirmDel:null,pendingImport:null,confirmWipe:false,stDraft:{},stBusy:false,stNote:'',stCode:null};
+  mDraft:{date:today()},metric:'weight',newEx:{name:'',group:'Borst'},confirmDel:null,pendingImport:null,confirmWipe:false,open:{},stDraft:{},stBusy:false,stNote:'',stCode:null};
 
 const $=s=>document.querySelector(s);
 document.getElementById('todayLbl').textContent=new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
@@ -240,13 +269,16 @@ function vToday(){
   let h=backupBanner();
   if(!rs.length)return h+empty('Nog geen schema','Maak een schema met de oefeningen die je doet. Daarna staat hier bij elk bezoek je vorige gewicht klaar.','Schema maken','tab:schemas');
   const isToday=S.wDate===today();
-  h+='<div class="wdate"><label class="f">Datum workout<input type="date" id="w-date" data-wdate="1" max="'+today()+'" value="'+esc(S.wDate)+'"></label>'+(isToday?'':'<button class="btn ghost sm" data-act="wToday">Naar vandaag</button>')+'</div>';
-  if(!isToday)h+='<p class="past">Je bewerkt de workout van '+esc(dayLabel(S.wDate))+'.</p>';
+  const gyms=[...new Set(Object.values(D.meta||{}).map(m=>m&&m.gym).filter(Boolean))];
+  h+='<div class="wtop"><label class="f">Datum<input type="date" id="w-date" data-wdate="1" max="'+today()+'" value="'+esc(S.wDate)+'"></label>'
+    +'<label class="f">Locatie<input id="w-gym" list="gymlist" data-wgym="1" placeholder="Bijv. Basic-Fit Zwolle" value="'+esc(gymFor(S.wDate))+'"></label></div>'
+    +'<datalist id="gymlist">'+gyms.map(g=>'<option value="'+esc(g)+'">').join('')+'</datalist>';
+  if(!isToday)h+='<p class="past">Workout van '+esc(dayLabel(S.wDate))+'. <button class="link" data-act="wToday">Naar vandaag</button></p>';
   const r=rs.find(x=>x.id===S.routineId)||rs[0];S.routineId=r.id;
   h+='<div class="chips" role="group" aria-label="Schema">'+rs.map(x=>'<button class="chip" aria-pressed="'+(x.id===r.id)+'" data-act="routine:'+esc(x.id)+'">'+esc(x.name)+'</button>').join('')+'</div>';
   if(!r.exercises.length)return h+empty('Dit schema is leeg','Voeg oefeningen toe bij Schema’s.','Oefeningen toevoegen','tab:schemas');
   const doneN=r.exercises.filter(id=>dayEntry(id,S.wDate)).length;
-  h+='<p class="muted small">'+doneN+' van '+r.exercises.length+' gedaan '+(isToday?'vandaag':'op deze dag')+'</p>';
+  h+='<p class="muted small count">'+doneN+' van '+r.exercises.length+' gedaan</p>';
   return h+r.exercises.map(card).join('')+stravaPanel();
 }
 function draftFor(exId){
@@ -254,25 +286,28 @@ function draftFor(exId){
   const l=dayEntry(exId,S.wDate)||prevFor(exId,S.wDate);
   return {weight:l&&l.weight!=null?String(l.weight).replace('.',','):'',sets:l&&l.sets!=null?l.sets:3,reps:l&&l.reps!=null?l.reps:10,note:l&&l.note||''};
 }
+function gymFor(date){const m=(D.meta||{})[date];return m&&m.gym!=null?m.gym:(D.lastGym||'')}
+function srTxt(e){return e.sets||e.reps?(e.sets||'?')+'×'+(e.reps||'?'):''}
 function card(exId){
   const ex=exById(exId);if(!ex)return '';
-  const de=dayEntry(exId,S.wDate);const l=prevFor(exId,S.wDate);const d=draftFor(exId);const id=esc(exId);
+  const de=dayEntry(exId,S.wDate);const l=prevFor(exId,S.wDate);const id=esc(exId);
+  if(de&&!S.open[exId]){
+    return '<section class="ex done" style="--plate:'+plate(ex)+'"><button class="exrow" data-act="open:'+id+'" aria-label="'+esc(ex.name)+' wijzigen"><span class="ex-name">'+esc(ex.name)+'</span><span class="done-sum">✓ '+fmtN(de.weight)+' kg '+srTxt(de)+'</span><span class="edit">Wijzig</span></button></section>';
+  }
+  const d=draftFor(exId);
   let h='<section class="ex" style="--plate:'+plate(ex)+'">';
-  h+='<div class="ex-head"><div><div class="ex-name">'+esc(ex.name)+'</div><div class="group">'+esc(ex.group||'')+'</div></div>'+(de?'<span class="done-tag">✓ Gedaan</span>':'')+'</div>';
-  if(l){
-    h+='<div class="last"><span class="big">'+fmtN(l.weight)+'<span class="u">kg</span></span>'+(l.sets||l.reps?'<span class="sr">'+(l.sets||'?')+' × '+(l.reps||'?')+'</span>':'')+'<span class="muted small">vorige keer, '+fmtDate(l.date)+'</span></div>';
-    if(l.note)h+='<div class="note">'+esc(l.note)+'</div>';
-  }else h+='<div class="last"><span class="big none">Geen eerdere keer</span></div>';
+  h+='<div class="ex-top"><span class="ex-name">'+esc(ex.name)+'</span><span>'+(de?'<button class="link" data-act="close:'+id+'">Inklappen</button> ':'')+'<button class="link" data-act="hist:'+id+'">'+(S.hist[exId]?'Verberg':'Historie')+'</button></span></div>';
+  h+='<div class="prev">'+(l?'Vorige: <b>'+fmtN(l.weight)+' kg</b>'+(srTxt(l)?' · '+srTxt(l):'')+' <span class="muted">· '+fmtDate(l.date)+'</span>':'<span class="muted">Nog niet eerder gedaan</span>')+'</div>';
+  if(l&&l.note)h+='<div class="note">'+esc(l.note)+'</div>';
   h+='<div class="log">'
     +'<label class="f w">Gewicht (kg)<div class="stepper"><button type="button" aria-label="2,5 kg minder" data-act="step:'+id+':-2.5">−</button><input id="w-'+id+'" inputmode="decimal" data-draft="'+id+'|weight" value="'+esc(d.weight)+'"><button type="button" aria-label="2,5 kg meer" data-act="step:'+id+':2.5">+</button></div></label>'
     +'<label class="f n">Sets<input id="s-'+id+'" inputmode="numeric" data-draft="'+id+'|sets" value="'+esc(d.sets)+'"></label>'
     +'<label class="f n">Reps<input id="r-'+id+'" inputmode="numeric" data-draft="'+id+'|reps" value="'+esc(d.reps)+'"></label>'
     +'</div>';
-  h+='<div class="log2"><input id="n-'+id+'" aria-label="Bijzonderheden" placeholder="Bijzonderheden, bijv. stoel stand 4" data-draft="'+id+'|note" value="'+esc(d.note)+'"><button class="btn'+(de?' ghost':'')+'" data-act="save:'+id+'">'+(de?'Bijwerken':'Opslaan')+'</button></div>';
-  h+='<div style="margin-top:8px"><button class="link" data-act="hist:'+id+'">'+(S.hist[exId]?'Historie verbergen':'Historie')+'</button></div>';
+  h+='<div class="log2"><input id="n-'+id+'" aria-label="Bijzonderheden" placeholder="Bijzonderheden" data-draft="'+id+'|note" value="'+esc(d.note)+'"><button class="btn'+(de?' ghost':'')+'" data-act="save:'+id+'">'+(de?'Bijwerken':'Opslaan')+'</button></div>';
   if(S.hist[exId]){
     const hs=entriesFor(exId).slice(0,10);
-    h+='<div class="hist">'+(hs.length?hs.map(e=>'<div class="hrow"><button class="link" data-act="gotoDate:'+esc(e.date)+'" aria-label="Workout van '+fmtDate(e.date)+' openen">'+fmtDate(e.date)+'</button><span><b>'+fmtN(e.weight)+' kg</b>'+(e.sets||e.reps?' '+(e.sets||'?')+' × '+(e.reps||'?'):'')+(e.note?'<br><span class="muted">'+esc(e.note)+'</span>':'')+'</span><button class="x" aria-label="Verwijderen" data-act="delEntry:'+esc(e.id)+'">×</button></div>').join('')+'<p class="muted small">Tik op een datum om die workout te openen.</p>':'<p class="muted small">Nog geen historie.</p>')+'</div>';
+    h+='<div class="hist">'+(hs.length?hs.map(e=>'<div class="hrow"><button class="link" data-act="gotoDate:'+esc(e.date)+'" aria-label="Workout van '+fmtDate(e.date)+' openen">'+fmtDate(e.date)+'</button><span><b>'+fmtN(e.weight)+' kg</b> '+srTxt(e)+(e.note?'<br><span class="muted">'+esc(e.note)+'</span>':'')+'</span><button class="x" aria-label="Verwijderen" data-act="delEntry:'+esc(e.id)+'">×</button></div>').join('')+'<p class="muted small">Tik op een datum om die workout te openen.</p>':'<p class="muted small">Nog geen historie.</p>')+'</div>';
   }
   return h+'</section>';
 }
@@ -548,19 +583,38 @@ function stDefaults(){
   return {name:'Krachttraining'+(r?' – '+r.name:''),start,dur:'60'};
 }
 function stDraft(){return Object.assign(stDefaults(),S.stDraft[S.wDate]||{})}
+function shareOpts(){return Object.assign({location:true,exercises:true,details:false,notes:false},ST.share||{})}
 function stDescription(){
-  const es=D.entries.filter(e=>e.date===S.wDate).sort((a,b)=>a.ts-b.ts);
-  return es.map(e=>{const ex=exById(e.exerciseId);return (ex?ex.name:'Oefening')+': '+fmtN(e.weight)+' kg'+(e.sets||e.reps?', '+(e.sets||'?')+'×'+(e.reps||'?'):'')+(e.note?' ('+e.note+')':'')}).join('\n')+'\n\nGelogd met Gymlog';
+  const o=shareOpts();const es=D.entries.filter(e=>e.date===S.wDate).sort((a,b)=>a.ts-b.ts);
+  const out=[];const gym=gymFor(S.wDate);
+  if(o.location&&gym)out.push('📍 '+gym);
+  if(o.exercises&&es.length){
+    if(out.length)out.push('');
+    es.forEach(e=>{const ex=exById(e.exerciseId);let t=ex?ex.name:'Oefening';
+      if(o.details)t+=': '+fmtN(e.weight)+' kg'+(srTxt(e)?', '+srTxt(e):'');
+      if(o.notes&&e.note)t+=' ('+e.note+')';
+      out.push(t)});
+  }
+  return out.join('\n');
 }
 function stravaPanel(){
   const n=D.entries.filter(e=>e.date===S.wDate).length;if(!n)return '';
   if(!stConnected())return '<p class="muted small" style="margin-top:18px">Deze workout naar Strava sturen? Koppel Strava bij <button class="link" data-act="tab:backup">Instellingen</button>.</p>';
-  const sent=(D.stravaSent||{})[S.wDate];const d=stDraft();
+  const sent=(D.stravaSent||{})[S.wDate];const d=stDraft();const o=shareOpts();
+  const opt=(k,l,dis)=>'<label class="opt'+(dis?' off':'')+'"><input type="checkbox" data-share="'+k+'"'+(o[k]?' checked':'')+(dis?' disabled':'')+'>'+l+'</label>';
   let h='<div class="panel" style="margin-top:18px"><h3>Naar Strava</h3>';
   if(sent)h+='<p class="small">✓ Staat op Strava. <a href="https://www.strava.com/activities/'+esc(sent)+'" target="_blank" rel="noopener">Bekijken</a></p>';
   h+='<label class="f" style="margin-top:8px">Titel<input id="st-name" data-st="name" value="'+esc(d.name)+'"></label>';
   if(!sent)h+='<div class="grid2" style="margin-top:8px"><label class="f">Starttijd<input type="time" id="st-start" data-st="start" value="'+esc(d.start)+'"></label><label class="f">Duur (min)<input id="st-dur" inputmode="numeric" data-st="dur" value="'+esc(d.dur)+'"></label></div>';
-  h+='<p class="small muted" style="margin-top:8px">'+n+' oefening'+(n===1?'':'en')+' gaan mee in de beschrijving.'+(sent?' Bij bijwerken veranderen titel en beschrijving, tijd en duur niet.':'')+'</p>';
+  h+='<div class="opts"><p class="small muted" style="margin:0 0 2px">Wat deel je in de beschrijving?</p>'
+    +opt('location','Locatie'+(gymFor(S.wDate)?' ('+esc(gymFor(S.wDate))+')':' (niet ingevuld)'),!gymFor(S.wDate))
+    +opt('exercises','Oefeningen',false)
+    +opt('details','Gewichten, sets en reps',!o.exercises)
+    +opt('notes','Bijzonderheden',!o.exercises)
+    +'</div>';
+  const desc=stDescription();
+  h+='<p class="small muted" style="margin:8px 0 0">Voorbeeld beschrijving:</p><div class="preview">'+(desc?esc(desc):'<span class="muted">(leeg)</span>')+'</div>';
+  if(sent)h+='<p class="small muted" style="margin-top:6px">Bij bijwerken veranderen titel en beschrijving; tijd en duur niet.</p>';
   h+='<div class="btnrow"><button class="btn" data-act="stSend"'+(S.stBusy?' disabled':'')+'>'+(S.stBusy?'Bezig…':(sent?'Strava bijwerken':'Naar Strava'))+'</button></div></div>';
   return h;
 }
@@ -599,7 +653,8 @@ function saveSet(exId){
   const de=dayEntry(exId,S.wDate);
   if(de)Object.assign(de,vals);
   else D.entries.push(Object.assign({id:rid(),ts:Date.now(),date:S.wDate,exerciseId:exId},vals));
-  save();delete S.drafts[exId];if(storageOk)toast(de?'Bijgewerkt':'Opgeslagen');render();
+  D.meta=D.meta||{};if(!D.meta[S.wDate])D.meta[S.wDate]={gym:gymFor(S.wDate)};
+  save();delete S.drafts[exId];delete S.open[exId];if(storageOk)toast(de?'Bijgewerkt':'Opgeslagen');render();
 }
 document.addEventListener('click',ev=>{
   const b=ev.target.closest('[data-act]');if(!b||b.disabled)return;
@@ -609,8 +664,10 @@ document.addEventListener('click',ev=>{
   if(act!=='delMeas')S.confirmMeas=null;
   if(act==='tab'){S.tab=a[0];render();window.scrollTo(0,0)}
   else if(act==='routine'){S.routineId=a[0];render()}
-  else if(act==='wToday'){S.wDate=today();S.drafts={};render()}
-  else if(act==='gotoDate'){S.wDate=a[0];S.drafts={};S.hist={};render();window.scrollTo(0,0)}
+  else if(act==='wToday'){S.wDate=today();S.drafts={};S.open={};render()}
+  else if(act==='gotoDate'){S.wDate=a[0];S.drafts={};S.hist={};S.open={};render();window.scrollTo(0,0)}
+  else if(act==='open'){S.open[a[0]]=true;render()}
+  else if(act==='close'){delete S.open[a[0]];delete S.drafts[a[0]];render()}
   else if(act==='step'){const d=Object.assign({},draftFor(a[0]));const w=(num(d.weight)||0)+Number(a[1]);d.weight=String(Math.max(0,Math.round(w*100)/100)).replace('.',',');S.drafts[a[0]]=d;render()}
   else if(act==='save')saveSet(a[0]);
   else if(act==='hist'){S.hist[a[0]]=!S.hist[a[0]];render()}
@@ -664,7 +721,9 @@ document.addEventListener('change',ev=>{
   else if(t.dataset.addto&&t.value){const r=D.routines.find(x=>x.id===t.dataset.addto);if(r&&!r.exercises.includes(t.value)){r.exercises.push(t.value);save();render()}else{t.value='';toast('Staat al in dit schema.')}}
   else if(t.dataset.rname){const n=t.value.trim();const r=D.routines.find(x=>x.id===t.dataset.rname);if(!n||!r)return render();r.name=n.slice(0,40);save();render()}
   else if(t.dataset.newex==='group'){S.newEx.group=t.value}
-  else if(t.dataset.wdate){const v=t.value;if(!v||v>today()){t.value=S.wDate;return toast('Kies een datum tot en met vandaag.')}S.wDate=v;S.drafts={};render()}
+  else if(t.dataset.wdate){const v=t.value;if(!v||v>today()){t.value=S.wDate;return toast('Kies een datum tot en met vandaag.')}S.wDate=v;S.drafts={};S.open={};render()}
+  else if(t.dataset.wgym){const g=t.value.trim().slice(0,60);D.meta=D.meta||{};D.meta[S.wDate]=Object.assign({},D.meta[S.wDate],{gym:g});if(g)D.lastGym=g;save();render()}
+  else if(t.dataset.share){const o=shareOpts();o[t.dataset.share]=t.checked;ST.share=o;saveSt();render()}
   else if(t.dataset.height){D.height=num(t.value);save();toast('Lengte opgeslagen');render()}
 });
 
