@@ -493,9 +493,19 @@ async function stApi(method,path,params){
   if(!r.ok)throw Object.assign(new Error('api'),{status:r.status});
   return j;
 }
+function stAuthUrl(){
+  // Op iPhone/iPad de mobiele variant: die opent zo mogelijk de Strava-app, waar je al bent ingelogd.
+  const mobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  return 'https://www.strava.com/oauth/'+(mobile?'mobile/':'')+'authorize?'+new URLSearchParams({client_id:ST.clientId,response_type:'code',redirect_uri:redirectUri(),approval_prompt:'auto',scope:'activity:write'});
+}
 function stConnect(){
   if(!ST.clientId||!ST.clientSecret)return toast('Vul eerst Client ID en Client Secret in.');
-  location.href='https://www.strava.com/oauth/authorize?'+new URLSearchParams({client_id:ST.clientId,response_type:'code',redirect_uri:redirectUri(),approval_prompt:'auto',scope:'activity:write'});
+  location.href=stAuthUrl();
+}
+function stCopyLink(){
+  if(!ST.clientId)return toast('Vul eerst je Client ID in.');
+  const u=stAuthUrl();
+  (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('Link gekopieerd. Plak hem in Safari.')).catch(()=>{S.stLink=u;render()});
 }
 async function stExchange(code){
   S.stBusy=true;S.stCode=null;render();
@@ -520,7 +530,9 @@ function stravaSettings(){
     +'<p class="small"><b>2.</b> Neem Client ID en Client Secret over:</p>'
     +'<div class="grid2" style="margin-top:6px"><label class="f">Client ID<input id="st-id" inputmode="numeric" data-stcfg="clientId" value="'+esc(ST.clientId||'')+'"></label><label class="f">Client Secret<input id="st-secret" type="password" autocomplete="off" data-stcfg="clientSecret" value="'+esc(ST.clientSecret||'')+'"></label></div>'
     +'<p class="small" style="margin-top:10px"><b>3.</b> Geef Gymlog toestemming:</p>'
-    +'<div class="btnrow"><button class="btn" data-act="stConnect"'+(S.stBusy?' disabled':'')+'>'+(S.stBusy?'Bezig…':'Koppel met Strava')+'</button></div>'
+    +'<div class="btnrow"><button class="btn" data-act="stConnect"'+(S.stBusy?' disabled':'')+'>'+(S.stBusy?'Bezig…':'Koppel met Strava')+'</button><button class="btn ghost" data-act="stCopyLink">Link voor Safari kopiëren</button></div>'
+    +(S.stLink?'<input readonly style="margin-top:8px" value="'+esc(S.stLink)+'">':'')
+    +'<p class="small muted" style="margin-top:8px">Lukt inloggen niet? Kopieer de link, open hem in Safari, log daar in (eventueel met de code die Strava je mailt) en plak de code die je terugkrijgt hieronder.</p>'
     +(S.stNote?'<p class="small" style="color:var(--danger);margin-top:8px">'+esc(S.stNote)+'</p>':'')
     +'<details style="margin-top:12px"><summary class="small">Kwam je na het koppelen in Safari uit? Code plakken</summary><div style="display:flex;gap:8px;margin-top:8px"><input id="st-paste" placeholder="Plak hier de code"><button class="btn ghost" data-act="stPaste">Gebruiken</button></div></details>'
     +'</div>';
@@ -619,6 +631,7 @@ document.addEventListener('click',ev=>{
   else if(act==='delMeas'){if(S.confirmMeas!==a[0]){S.confirmMeas=a[0];return render()}S.confirmMeas=null;D.meas=D.meas.filter(m=>m.id!==a[0]);save();toast('Meting verwijderd');render()}
   else if(act==='exportJson')exportJson();
   else if(act==='stConnect')stConnect();
+  else if(act==='stCopyLink')stCopyLink();
   else if(act==='stDisconnect')stDisconnect();
   else if(act==='stSend')stSend();
   else if(act==='stPaste'){const c=$('#st-paste').value.trim();if(!c)return toast('Plak eerst de code.');if(!ST.clientId||!ST.clientSecret)return toast('Vul eerst Client ID en Client Secret in.');stExchange(c)}
