@@ -178,7 +178,7 @@ const DEFAULT_EX=[
   ['shoulder-press','Shoulder press','Schouders'],['lateral-raise','Lateral raise','Schouders'],
   ['biceps-curl','Biceps curl','Armen'],['triceps-pushdown','Triceps pushdown','Armen'],
   ['plank','Plank','Core'],['crunch-machine','Crunch (machine)','Core'],['crunch-bench','Crunch (bank)','Core'],
-  ['treadmill','Loopband','Cardio'],['rowing','Roeitrainer','Cardio'],['crosstrainer','Crosstrainer','Cardio'],
+  ['treadmill','Loopband','Cardio'],['rowing','Roeitrainer','Cardio'],['crosstrainer','Crosstrainer','Cardio'],['spinning','Spinning','Cardio'],
   ['bent-over-row','Bend over row (halter)','Rug'],['arm-curl-db','Arm curl (halter)','Armen']
 ].map(([id,name,group])=>({id,name,group}));
 const METRICS=[
@@ -281,33 +281,50 @@ function vToday(){
   h+='<p class="muted small count">'+doneN+' van '+r.exercises.length+' gedaan</p>';
   return h+r.exercises.map(card).join('')+stravaPanel();
 }
+function isCardio(exOrId){const ex=typeof exOrId==='string'?exById(exOrId):exOrId;return !!ex&&ex.group==='Cardio'}
+function dec(v){return v!=null?String(v).replace('.',','):''}
 function draftFor(exId){
   if(S.drafts[exId])return S.drafts[exId];
   const l=dayEntry(exId,S.wDate)||prevFor(exId,S.wDate);
+  if(isCardio(exId))return {minutes:l&&l.minutes!=null?l.minutes:20,km:l?dec(l.km):'',level:l?dec(l.level):'',note:l&&l.note||''};
   return {weight:l&&l.weight!=null?String(l.weight).replace('.',','):'',sets:l&&l.sets!=null?l.sets:3,reps:l&&l.reps!=null?l.reps:10,note:l&&l.note||''};
 }
 function gymFor(date){const m=(D.meta||{})[date];return m&&m.gym!=null?m.gym:(D.lastGym||'')}
 function srTxt(e){return e.sets||e.reps?(e.sets||'?')+'×'+(e.reps||'?'):''}
+// Samenvatting van één regel: cardio in minuten/km/niveau, kracht in kg en sets×reps
+function entryTxt(e,html){
+  const B=t=>html?'<b>'+t+'</b>':t;
+  if(e.minutes!=null){const p=[B(fmtN(e.minutes,0)+' min')];if(e.km!=null)p.push(fmtN(e.km,2)+' km');if(e.level!=null)p.push('niveau '+fmtN(e.level));return p.join(' · ')}
+  return B(fmtN(e.weight)+' kg')+(srTxt(e)?' · '+srTxt(e):'');
+}
 function card(exId){
   const ex=exById(exId);if(!ex)return '';
   const de=dayEntry(exId,S.wDate);const l=prevFor(exId,S.wDate);const id=esc(exId);
   if(de&&!S.open[exId]){
-    return '<section class="ex done" style="--plate:'+plate(ex)+'"><button class="exrow" data-act="open:'+id+'" aria-label="'+esc(ex.name)+' wijzigen"><span class="ex-name">'+esc(ex.name)+'</span><span class="done-sum">✓ '+fmtN(de.weight)+' kg '+srTxt(de)+'</span><span class="edit">Wijzig</span></button></section>';
+    return '<section class="ex done" style="--plate:'+plate(ex)+'"><button class="exrow" data-act="open:'+id+'" aria-label="'+esc(ex.name)+' wijzigen"><span class="ex-name">'+esc(ex.name)+'</span><span class="done-sum">✓ '+entryTxt(de)+'</span><span class="edit">Wijzig</span></button></section>';
   }
   const d=draftFor(exId);
   let h='<section class="ex" style="--plate:'+plate(ex)+'">';
   h+='<div class="ex-top"><span class="ex-name">'+esc(ex.name)+'</span><span>'+(de?'<button class="link" data-act="close:'+id+'">Inklappen</button> ':'')+'<button class="link" data-act="hist:'+id+'">'+(S.hist[exId]?'Verberg':'Historie')+'</button></span></div>';
-  h+='<div class="prev">'+(l?'Vorige: <b>'+fmtN(l.weight)+' kg</b>'+(srTxt(l)?' · '+srTxt(l):'')+' <span class="muted">· '+fmtDate(l.date)+'</span>':'<span class="muted">Nog niet eerder gedaan</span>')+'</div>';
+  h+='<div class="prev">'+(l?'Vorige: '+entryTxt(l,true)+' <span class="muted">· '+fmtDate(l.date)+'</span>':'<span class="muted">Nog niet eerder gedaan</span>')+'</div>';
   if(l&&l.note)h+='<div class="note">'+esc(l.note)+'</div>';
+  if(isCardio(ex)){
+    h+='<div class="log">'
+      +'<label class="f w">Duur (min)<div class="stepper"><button type="button" aria-label="5 minuten minder" data-act="stepm:'+id+':-5">−</button><input id="m-'+id+'" inputmode="numeric" data-draft="'+id+'|minutes" value="'+esc(d.minutes)+'"><button type="button" aria-label="5 minuten meer" data-act="stepm:'+id+':5">+</button></div></label>'
+      +'<label class="f n">Km<input id="k-'+id+'" inputmode="decimal" placeholder="–" data-draft="'+id+'|km" value="'+esc(d.km)+'"></label>'
+      +'<label class="f n">Niveau<input id="l-'+id+'" inputmode="decimal" placeholder="–" data-draft="'+id+'|level" value="'+esc(d.level)+'"></label>'
+      +'</div>';
+  }else{
   h+='<div class="log">'
     +'<label class="f w">Gewicht (kg)<div class="stepper"><button type="button" aria-label="2,5 kg minder" data-act="step:'+id+':-2.5">−</button><input id="w-'+id+'" inputmode="decimal" data-draft="'+id+'|weight" value="'+esc(d.weight)+'"><button type="button" aria-label="2,5 kg meer" data-act="step:'+id+':2.5">+</button></div></label>'
     +'<label class="f n">Sets<input id="s-'+id+'" inputmode="numeric" data-draft="'+id+'|sets" value="'+esc(d.sets)+'"></label>'
     +'<label class="f n">Reps<input id="r-'+id+'" inputmode="numeric" data-draft="'+id+'|reps" value="'+esc(d.reps)+'"></label>'
     +'</div>';
+  }
   h+='<div class="log2"><input id="n-'+id+'" aria-label="Bijzonderheden" placeholder="Bijzonderheden" data-draft="'+id+'|note" value="'+esc(d.note)+'"><button class="btn'+(de?' ghost':'')+'" data-act="save:'+id+'">'+(de?'Bijwerken':'Opslaan')+'</button></div>';
   if(S.hist[exId]){
     const hs=entriesFor(exId).slice(0,10);
-    h+='<div class="hist">'+(hs.length?hs.map(e=>'<div class="hrow"><button class="link" data-act="gotoDate:'+esc(e.date)+'" aria-label="Workout van '+fmtDate(e.date)+' openen">'+fmtDate(e.date)+'</button><span><b>'+fmtN(e.weight)+' kg</b> '+srTxt(e)+(e.note?'<br><span class="muted">'+esc(e.note)+'</span>':'')+'</span><button class="x" aria-label="Verwijderen" data-act="delEntry:'+esc(e.id)+'">×</button></div>').join('')+'<p class="muted small">Tik op een datum om die workout te openen.</p>':'<p class="muted small">Nog geen historie.</p>')+'</div>';
+    h+='<div class="hist">'+(hs.length?hs.map(e=>'<div class="hrow"><button class="link" data-act="gotoDate:'+esc(e.date)+'" aria-label="Workout van '+fmtDate(e.date)+' openen">'+fmtDate(e.date)+'</button><span>'+entryTxt(e,true)+(e.note?'<br><span class="muted">'+esc(e.note)+'</span>':'')+'</span><button class="x" aria-label="Verwijderen" data-act="delEntry:'+esc(e.id)+'">×</button></div>').join('')+'<p class="muted small">Tik op een datum om die workout te openen.</p>':'<p class="muted small">Nog geen historie.</p>')+'</div>';
   }
   return h+'</section>';
 }
@@ -591,7 +608,7 @@ function stDescription(){
   if(o.exercises&&es.length){
     if(out.length)out.push('');
     es.forEach(e=>{const ex=exById(e.exerciseId);let t=ex?ex.name:'Oefening';
-      if(o.details)t+=': '+fmtN(e.weight)+' kg'+(srTxt(e)?', '+srTxt(e):'');
+      if(o.details)t+=': '+entryTxt(e).split(' · ').join(', ');
       if(o.notes&&e.note)t+=' ('+e.note+')';
       out.push(t)});
   }
@@ -647,9 +664,14 @@ async function stSend(){
 
 /* ---------- acties ---------- */
 function saveSet(exId){
-  const d=draftFor(exId);const w=num(d.weight);
-  if(w==null)return toast('Vul een gewicht in (0 mag ook).');
-  const vals={weight:w,sets:int(d.sets),reps:int(d.reps),note:String(d.note||'').trim().slice(0,200)};
+  const d=draftFor(exId);const note=String(d.note||'').trim().slice(0,200);let vals;
+  if(isCardio(exId)){
+    const m=int(d.minutes);if(!m||m<1)return toast('Vul het aantal minuten in.');
+    vals={minutes:m,km:num(d.km),level:num(d.level),note};
+  }else{
+    const w=num(d.weight);if(w==null)return toast('Vul een gewicht in (0 mag ook).');
+    vals={weight:w,sets:int(d.sets),reps:int(d.reps),note};
+  }
   const de=dayEntry(exId,S.wDate);
   if(de)Object.assign(de,vals);
   else D.entries.push(Object.assign({id:rid(),ts:Date.now(),date:S.wDate,exerciseId:exId},vals));
@@ -669,6 +691,7 @@ document.addEventListener('click',ev=>{
   else if(act==='open'){S.open[a[0]]=true;render()}
   else if(act==='close'){delete S.open[a[0]];delete S.drafts[a[0]];render()}
   else if(act==='step'){const d=Object.assign({},draftFor(a[0]));const w=(num(d.weight)||0)+Number(a[1]);d.weight=String(Math.max(0,Math.round(w*100)/100)).replace('.',',');S.drafts[a[0]]=d;render()}
+  else if(act==='stepm'){const d=Object.assign({},draftFor(a[0]));d.minutes=String(Math.max(0,(int(d.minutes)||0)+Number(a[1])));S.drafts[a[0]]=d;render()}
   else if(act==='save')saveSet(a[0]);
   else if(act==='hist'){S.hist[a[0]]=!S.hist[a[0]];render()}
   else if(act==='delEntry'){const e=D.entries.find(x=>x.id===a[0]);D.entries=D.entries.filter(x=>x.id!==a[0]);if(e)delete S.drafts[e.exerciseId];save();toast('Verwijderd');render()}
