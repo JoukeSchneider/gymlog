@@ -41,7 +41,7 @@ h3{font:600 1.2rem/1.2 "Barlow Condensed","Arial Narrow",sans-serif;margin:0}
 p{margin:6px 0}
 .muted{color:var(--muted)} .small{font-size:.9rem}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;transform:translateZ(0);background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
-nav.tabs button{flex:1;max-width:160px;border:0;border-top:3px solid transparent;background:none;color:var(--muted);font:600 1.05rem "Barlow Condensed","Arial Narrow",sans-serif;padding:11px 4px 13px;cursor:pointer}
+nav.tabs button{flex:1;max-width:160px;border:0;border-top:3px solid transparent;background:none;color:var(--muted);font:600 .98rem "Barlow Condensed","Arial Narrow",sans-serif;padding:11px 2px 13px;cursor:pointer;white-space:nowrap}
 nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--accent)}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 6px}
 .chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 14px;font:500 .95rem "Barlow",sans-serif;white-space:nowrap;cursor:pointer}
@@ -159,6 +159,13 @@ body.kb #toast{bottom:16px}
 .rhead .chev{color:var(--muted);font-size:.9rem}
 .rpanel.open{padding:0 14px 14px}
 .rpanel.open .rhead{padding:13px 0 0}
+.recs .prow b,.panel .prow b{font-variant-numeric:tabular-nums}
+.gbar{display:grid;grid-template-columns:80px 1fr 34px;gap:8px;align-items:center;padding:4px 0;font-size:.92rem}
+.gt{background:var(--soft);border-radius:3px;height:12px;overflow:hidden;display:block}
+.gt span{display:block;height:100%;border-radius:3px}
+.gv{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.prow{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--line);font-size:.95rem}
+.prow .r{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -170,6 +177,7 @@ body.kb #toast{bottom:16px}
 <nav class="tabs" aria-label="Onderdelen">
   <button data-act="tab:workout">Workout</button>
   <button data-act="tab:schemas">Schema’s</button>
+  <button data-act="tab:voortgang">Voortgang</button>
   <button data-act="tab:metingen">Metingen</button>
   <button data-act="tab:backup">Instellingen</button>
 </nav>
@@ -205,7 +213,7 @@ const METRICS=[
   {k:'waist',l:'Buikomtrek',u:'cm',lowerBetter:true},
   {k:'bmi',l:'BMI',u:'',lowerBetter:true,computed:true}
 ];
-const TABS=['workout','schemas','metingen','backup'];
+const TABS=['workout','schemas','voortgang','metingen','backup'];
 
 function pad(n){return String(n).padStart(2,'0')}
 function today(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
@@ -263,6 +271,7 @@ function render(){
 function view(){
   if(S.tab==='schemas')return vSchemas();
   if(S.tab==='metingen')return vMeas();
+  if(S.tab==='voortgang')return vProgress();
   if(S.tab==='backup')return vBackup();
   return vToday();
 }
@@ -423,6 +432,136 @@ function chart(pts,met){
   pts.forEach((p,i)=>{s+='<circle cx="'+X(xs[i]).toFixed(1)+'" cy="'+Y(p.v).toFixed(1)+'" r="3.5" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"><title>'+fmtDate(p.date)+': '+fmtN(p.v)+'</title></circle>'});
   s+='<text x="'+L+'" y="'+(H-8)+'" font-size="12" fill="var(--muted)" font-family="Barlow,sans-serif">'+fmtDate(pts[0].date)+'</text><text x="'+(W-R)+'" y="'+(H-8)+'" text-anchor="end" font-size="12" fill="var(--muted)" font-family="Barlow,sans-serif">'+fmtDate(pts[pts.length-1].date)+'</text>';
   return s+'</svg>';
+}
+
+
+/* ---------- Voortgang ---------- */
+function addDays(iso,n){const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function weekStart(iso){const d=new Date(iso+'T12:00:00');const wd=(d.getDay()+6)%7;return addDays(iso,-wd)}
+function isStrength(e){return e.minutes==null&&e.weight!=null}
+function vol(e){return isStrength(e)?e.weight*(e.sets||1)*(e.reps||1):0}
+function e1rm(e){return !isStrength(e)?null:(e.reps&&e.reps>1?e.weight*(1+e.reps/30):e.weight)}
+function fmtVol(v){return v>=1000?fmtN(v/1000,1)+' t':fmtN(v,0)+' kg'}
+const RANGES=[['4w','4 weken',28],['12w','12 weken',84],['1j','1 jaar',365],['all','Alles',null]];
+function rangeStart(){
+  const r=RANGES.find(x=>x[0]===S.range)||RANGES[1];
+  if(r[2])return addDays(today(),-r[2]+1);
+  const first=D.entries.map(e=>e.date).sort()[0]||today();
+  return first;
+}
+function weeksBetween(from,to){const out=[];let w=weekStart(from);const end=weekStart(to);while(w<=end){out.push(w);w=addDays(w,7)}return out}
+function barChart(labels,vals,opt){
+  const n=vals.length;if(!n)return '';
+  const W=600,H=170,L=48,R=10,T=12,B=26;const max=Math.max(...vals,0)||1;const bw=(W-L-R)/n;const step=Math.ceil(n/6);
+  const Y=v=>T+(1-v/max)*(H-T-B);const f=opt.fmt||(v=>fmtN(v));
+  let s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opt.label)+'">';
+  (opt.int?[0,max]:[0,max/2,max]).forEach(v=>{const y=Y(v).toFixed(1);s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)"/><text x="'+(L-6)+'" y="'+y+'" dy="4" text-anchor="end" font-size="12" fill="var(--muted)" font-family="Barlow,sans-serif">'+f(v)+'</text>'});
+  vals.forEach((v,i)=>{const x=L+i*bw+bw*.15,w=Math.max(1,bw*.7),y=Y(v);s+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+(H-B-y).toFixed(1)+'" rx="2" fill="'+(opt.color||'var(--accent)')+'"><title>'+esc(labels[i])+': '+f(v)+'</title></rect>';
+    if(i%step===0)s+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="Barlow,sans-serif">'+esc(labels[i])+'</text>'});
+  return s+'</svg>';
+}
+function comboChart(labels,vols,pts,metLabel){
+  // balken = weekvolume (links), lijn = lichaamswaarde (rechts)
+  const n=labels.length;const W=600,H=190,L=48,R=48,T=12,B=26;const max=Math.max(...vols,0)||1;const bw=(W-L-R)/n;const step=Math.ceil(n/6);
+  const Y=v=>T+(1-v/max)*(H-T-B);
+  let s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Trainingsvolume en '+esc(metLabel)+'">';
+  [0,max].forEach(v=>{const y=Y(v).toFixed(1);s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)"/><text x="'+(L-6)+'" y="'+y+'" dy="4" text-anchor="end" font-size="12" fill="var(--muted)" font-family="Barlow,sans-serif">'+fmtVol(v)+'</text>'});
+  vols.forEach((v,i)=>{const x=L+i*bw+bw*.15,w=Math.max(1,bw*.7),y=Y(v);s+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+(H-B-y).toFixed(1)+'" rx="2" fill="var(--soft)" stroke="var(--line)"><title>'+esc(labels[i])+': '+fmtVol(v)+'</title></rect>';
+    if(i%step===0)s+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="Barlow,sans-serif">'+esc(labels[i])+'</text>'});
+  if(pts.length){
+    let lo=Math.min(...pts.map(p=>p.v)),hi=Math.max(...pts.map(p=>p.v));const pd=(hi-lo)*.2||1;lo-=pd;hi+=pd;
+    const Y2=v=>T+(1-(v-lo)/(hi-lo))*(H-T-B);const X=i=>L+i*bw+bw/2;
+    s+='<polyline points="'+pts.map(p=>X(p.i).toFixed(1)+','+Y2(p.v).toFixed(1)).join(' ')+'" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>';
+    pts.forEach(p=>{s+='<circle cx="'+X(p.i).toFixed(1)+'" cy="'+Y2(p.v).toFixed(1)+'" r="3.5" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"><title>'+fmtN(p.v)+'</title></circle>'});
+    [lo+pd,hi-pd].forEach(v=>{s+='<text x="'+(W-R+6)+'" y="'+Y2(v).toFixed(1)+'" dy="4" font-size="12" fill="var(--accent)" font-family="Barlow,sans-serif">'+fmtN(v)+'</text>'});
+  }
+  return s+'</svg>';
+}
+function vProgress(){
+  let h='<h2>Voortgang</h2>';
+  if(!D.entries.length)return h+empty('Nog niets te laten zien','Na je eerste workouts verschijnt hier je voortgang.','Naar Workout','tab:workout');
+  h+='<div class="chips" role="group" aria-label="Periode">'+RANGES.map(r=>'<button class="chip" aria-pressed="'+((S.range||'12w')===r[0])+'" data-act="range:'+r[0]+'">'+r[1]+'</button>').join('')+'</div>';
+  const from=rangeStart(),to=today();
+  const es=D.entries.filter(e=>e.date>=from&&e.date<=to);
+  const weeks=weeksBetween(from,to);const wl=weeks.map(w=>fmtDate(w));
+  const days=[...new Set(es.map(e=>e.date))];
+  const perWeek=weeks.map(w=>days.filter(d=>weekStart(d)===w).length);
+  const volWeek=weeks.map(w=>es.filter(e=>weekStart(e.date)===w).reduce((a,e)=>a+vol(e),0));
+  const cardioWeek=weeks.map(w=>es.filter(e=>e.minutes!=null&&weekStart(e.date)===w).reduce((a,e)=>a+e.minutes,0));
+  // reeks: aaneengesloten weken met minstens één training (lopende week telt niet tegen je)
+  const allDays=new Set(D.entries.map(e=>weekStart(e.date)));let streak=0;let w=weekStart(today());if(!allDays.has(w))w=addDays(w,-7);while(allDays.has(w)){streak++;w=addDays(w,-7)}
+  const totVol=volWeek.reduce((a,b)=>a+b,0),totCardio=cardioWeek.reduce((a,b)=>a+b,0);
+  h+='<div class="stats"><div class="stat"><div class="v">'+days.length+'</div><div class="l">trainingen</div></div>'
+    +'<div class="stat"><div class="v">'+fmtN(days.length/Math.max(1,weeks.length),1)+'</div><div class="l">per week</div></div>'
+    +'<div class="stat"><div class="v">'+streak+'</div><div class="l">weken op rij</div></div>'
+    +'<div class="stat"><div class="v">'+fmtVol(totVol)+'</div><div class="l">volume</div></div></div>';
+
+  // --- Kracht per oefening + records
+  const strengthIds=[...new Set(D.entries.filter(isStrength).map(e=>e.exerciseId))].filter(id=>exById(id));
+  h+='<h2>Kracht</h2>';
+  if(!strengthIds.length)h+='<p class="muted">Nog geen krachtoefeningen gelogd.</p>';
+  else{
+    const cnt=id=>D.entries.filter(e=>e.exerciseId===id&&isStrength(e)).length;
+    if(!S.progEx||!strengthIds.includes(S.progEx))S.progEx=strengthIds.slice().sort((a,b)=>cnt(b)-cnt(a))[0];
+    h+='<select aria-label="Oefening" data-progex="1">'+strengthIds.map(id=>exById(id)).sort((a,b)=>a.name.localeCompare(b.name,'nl')).map(e=>'<option value="'+esc(e.id)+'"'+(e.id===S.progEx?' selected':'')+'>'+esc(e.name)+'</option>').join('')+'</select>';
+    const all=D.entries.filter(e=>e.exerciseId===S.progEx&&isStrength(e)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.ts-b.ts);
+    const inR=all.filter(e=>e.date>=from);
+    const m=S.progMetric||'e1rm';
+    h+='<div class="chips" style="margin-top:8px"><button class="chip" aria-pressed="'+(m==='e1rm')+'" data-act="progm:e1rm">Geschat max (1RM)</button><button class="chip" aria-pressed="'+(m==='top')+'" data-act="progm:top">Zwaarste gewicht</button></div>';
+    const byDay={};inR.forEach(e=>{const v=m==='top'?e.weight:e1rm(e);if(byDay[e.date]==null||v>byDay[e.date])byDay[e.date]=v});
+    const pts=Object.keys(byDay).sort().map(d=>({date:d,v:byDay[d]}));
+    h+=pts.length?chart(pts,{l:m==='top'?'Zwaarste gewicht':'Geschat max'}):'<p class="muted small">Geen sessies in deze periode.</p>';
+    if(pts.length>=2){const d=pts[pts.length-1].v-pts[0].v;h+='<p class="small">'+(Math.abs(d)<0.05?'Gelijk gebleven':(d>0?'<span class="delta down">+'+fmtN(d)+' kg</span>':'<span class="delta up">−'+fmtN(-d)+' kg</span>'))+' sinds '+fmtDate(pts[0].date)+'.</p>'}
+    const best=(f)=>all.reduce((b,e)=>f(e)>(b?f(b):-1)?e:b,null);
+    const bw=best(e=>e.weight),b1=best(e1rm),bv=best(vol);
+    h+='<div class="panel recs"><h3>Records '+esc(exById(S.progEx).name)+'</h3>'
+      +'<div class="prow"><span>Zwaarste gewicht</span><span class="r"><b>'+fmtN(bw.weight)+' kg</b> <span class="muted">'+fmtDate(bw.date)+'</span></span></div>'
+      +'<div class="prow"><span>Geschat max (1RM)</span><span class="r"><b>'+fmtN(e1rm(b1))+' kg</b> <span class="muted">'+fmtDate(b1.date)+'</span></span></div>'
+      +'<div class="prow"><span>Meeste volume</span><span class="r"><b>'+fmtVol(vol(bv))+'</b> <span class="muted">'+fmtDate(bv.date)+'</span></span></div>'
+      +'<p class="small muted" style="margin-top:6px">1RM is een schatting van wat je één keer kunt tillen, berekend uit gewicht en reps (Epley-formule).</p></div>';
+    // recente records over alle oefeningen
+    const prs=[];
+    strengthIds.forEach(id=>{let mx=-1;D.entries.filter(e=>e.exerciseId===id&&isStrength(e)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.ts-b.ts).forEach(e=>{if(mx>=0&&e.weight>mx&&e.date>=from)prs.push(e);if(e.weight>mx)mx=e.weight})});
+    prs.sort((a,b)=>b.date<a.date?-1:b.date>a.date?1:b.ts-a.ts);
+    // alleen het meest recente record per oefening
+    const seen=new Set();
+    const latest=prs.filter(e=>{if(seen.has(e.exerciseId))return false;seen.add(e.exerciseId);return true});
+    prs.length=0;prs.push(...latest);
+    if(prs.length)h+='<div class="panel"><h3>🏆 Nieuwe records in deze periode</h3>'+prs.slice(0,8).map(e=>'<div class="prow"><span>'+esc(exById(e.exerciseId).name)+'</span><span class="r"><b>'+fmtN(e.weight)+' kg</b> <span class="muted">'+fmtDate(e.date)+'</span></span></div>').join('')+'</div>';
+  }
+
+  // --- Volume en regelmaat
+  h+='<h2>Volume en regelmaat</h2><p class="small muted">Volume = gewicht × sets × reps, per week.</p>';
+  h+=barChart(wl,volWeek,{label:'Volume per week',fmt:fmtVol});
+  h+='<p class="small muted" style="margin-top:10px">Trainingen per week</p>'+barChart(wl,perWeek,{label:'Trainingen per week',fmt:v=>fmtN(v,0),color:'var(--ok)',int:true});
+  const groups={};es.filter(isStrength).forEach(e=>{const g=(exById(e.exerciseId)||{}).group||'Overig';groups[g]=(groups[g]||0)+(e.sets||1)});
+  const gk=Object.keys(groups).sort((a,b)=>groups[b]-groups[a]);const gmax=Math.max(1,...Object.values(groups));
+  if(gk.length)h+='<div class="panel"><h3>Sets per spiergroep</h3>'+gk.map(g=>'<div class="gbar"><span class="gl">'+esc(g)+'</span><span class="gt"><span style="width:'+(groups[g]/gmax*100).toFixed(1)+'%;background:'+(GROUPS[g]||'var(--muted)')+'"></span></span><span class="gv">'+groups[g]+'</span></div>').join('')
+    +(Object.keys(GROUPS).filter(g=>g!=='Cardio'&&!groups[g]).length?'<p class="small muted" style="margin-top:6px">Niet getraind in deze periode: '+Object.keys(GROUPS).filter(g=>g!=='Cardio'&&!groups[g]).join(', ')+'.</p>':'')+'</div>';
+
+  // --- Cardio
+  h+='<h2>Cardio</h2>';
+  if(!totCardio)h+='<p class="muted">Geen cardio in deze periode.</p>';
+  else{
+    const km=es.filter(e=>e.minutes!=null).reduce((a,e)=>a+(e.km||0),0);
+    h+='<div class="stats"><div class="stat"><div class="v">'+fmtN(totCardio,0)+'</div><div class="l">minuten</div></div>'+(km?'<div class="stat"><div class="v">'+fmtN(km,1)+'</div><div class="l">km</div></div>':'')+'<div class="stat"><div class="v">'+fmtN(totCardio/Math.max(1,weeks.length),0)+'</div><div class="l">min per week</div></div></div>';
+    h+=barChart(wl,cardioWeek,{label:'Cardio-minuten per week',fmt:v=>fmtN(v,0),color:'#D9741E'});
+  }
+
+  // --- Lichaam naast volume
+  h+='<h2>Lichaam en training</h2>';
+  const BM=[['fat','Vetpercentage'],['muscle','Spiermassa'],['weight','Gewicht']];
+  const bm=S.bodyMetric||'fat';
+  const meas=D.meas.filter(x=>x.date>=from&&x[bm]!=null).sort((a,b)=>a.date<b.date?-1:1);
+  h+='<div class="chips">'+BM.map(b=>'<button class="chip" aria-pressed="'+(b[0]===bm)+'" data-act="bodym:'+b[0]+'">'+b[1]+'</button>').join('')+'</div>';
+  if(!meas.length)h+='<p class="muted">Geen metingen in deze periode. Voeg ze toe bij Metingen, bijvoorbeeld via een foto van je Tanita-bon.</p>';
+  else{
+    const lp={};meas.forEach(x=>{const i=weeks.indexOf(weekStart(x.date));if(i>=0)lp[i]=x[bm]});
+    const pts=Object.keys(lp).map(Number).sort((a,b)=>a-b).map(i=>({i,v:lp[i]}));
+    h+=comboChart(wl,volWeek,pts,BM.find(b=>b[0]===bm)[1]);
+    h+='<p class="small muted">Grijze balken: trainingsvolume per week. Blauwe lijn: '+BM.find(b=>b[0]===bm)[1].toLowerCase()+'. Verbanden worden pas betrouwbaar na een paar maanden meten.</p>';
+  }
+  return h;
 }
 
 /* ---------- Back-up ---------- */
@@ -701,11 +840,13 @@ function saveSet(exId){
     vals={weight:w,sets:int(d.sets),reps:int(d.reps),note};
   }
   const de=dayEntry(exId,S.wDate);
+  let pr=false;
+  if(vals.weight!=null){const prevMax=Math.max(-1,...entriesFor(exId).filter(e=>e!==de&&e.weight!=null&&e.minutes==null).map(e=>e.weight));pr=prevMax>=0&&vals.weight>prevMax}
   if(!de&&S.wDate===today())rememberOrder(exId);
   if(de)Object.assign(de,vals);
   else D.entries.push(Object.assign({id:rid(),ts:Date.now(),date:S.wDate,exerciseId:exId},vals));
   D.meta=D.meta||{};if(!D.meta[S.wDate])D.meta[S.wDate]={gym:gymFor(S.wDate)};
-  save();delete S.drafts[exId];delete S.open[exId];if(storageOk)toast(de?'Bijgewerkt':'Opgeslagen');render();
+  save();delete S.drafts[exId];delete S.open[exId];if(storageOk)toast(pr?'🏆 Nieuw record!':(de?'Bijgewerkt':'Opgeslagen'));render();
 }
 document.addEventListener('click',ev=>{
   const b=ev.target.closest('[data-act]');if(!b||b.disabled)return;
@@ -718,6 +859,9 @@ document.addEventListener('click',ev=>{
   else if(act==='wToday'){S.wDate=today();S.drafts={};S.open={};render()}
   else if(act==='gotoDate'){S.wDate=a[0];S.drafts={};S.hist={};S.open={};render();window.scrollTo(0,0)}
   else if(act==='open'){S.open[a[0]]=true;render()}
+  else if(act==='range'){S.range=a[0];render()}
+  else if(act==='progm'){S.progMetric=a[0];render()}
+  else if(act==='bodym'){S.bodyMetric=a[0];render()}
   else if(act==='toggleRoutine'){S.openRoutine=S.openRoutine===a[0]?null:a[0];render()}
   else if(act==='toggleCatalog'){S.openCatalog=!S.openCatalog;render()}
   else if(act==='close'){delete S.open[a[0]];delete S.drafts[a[0]];render()}
@@ -775,6 +919,7 @@ document.addEventListener('change',ev=>{
   else if(t.dataset.addto&&t.value){const r=D.routines.find(x=>x.id===t.dataset.addto);if(r&&!r.exercises.includes(t.value)){r.exercises.push(t.value);save();render()}else{t.value='';toast('Staat al in dit schema.')}}
   else if(t.dataset.rname){const n=t.value.trim();const r=D.routines.find(x=>x.id===t.dataset.rname);if(!n||!r)return render();r.name=n.slice(0,40);save();render()}
   else if(t.dataset.newex==='group'){S.newEx.group=t.value}
+  else if(t.dataset.progex){S.progEx=t.value;render()}
   else if(t.dataset.wdate){const v=t.value;if(!v||v>today()){t.value=S.wDate;return toast('Kies een datum tot en met vandaag.')}S.wDate=v;S.drafts={};S.open={};render()}
   else if(t.dataset.wgym){const g=t.value.trim().slice(0,60);D.meta=D.meta||{};D.meta[S.wDate]=Object.assign({},D.meta[S.wDate],{gym:g});if(g)D.lastGym=g;save();render()}
   else if(t.dataset.share){const o=shareOpts();o[t.dataset.share]=t.checked;ST.share=o;saveSt();render()}
@@ -788,7 +933,14 @@ function kbCheck(){
   const vv=window.visualViewport;const small=vv?vv.height<window.innerHeight*0.8:false;
   document.body.classList.toggle('kb',!!(typing||small));
 }
-document.addEventListener('focusin',kbCheck);
+document.addEventListener('focusin',ev=>{
+  kbCheck();
+  // Houd het veld waarin je typt midden in beeld, boven het toetsenbord
+  const t=ev.target;
+  if(t&&t.tagName==='INPUT'&&!['checkbox','radio','file'].includes(t.type)){
+    setTimeout(()=>{if(document.activeElement===t)t.scrollIntoView({block:'center',behavior:'smooth'})},350);
+  }
+});
 document.addEventListener('focusout',()=>setTimeout(kbCheck,50));
 if(window.visualViewport)window.visualViewport.addEventListener('resize',kbCheck);
 render();
