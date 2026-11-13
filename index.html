@@ -40,7 +40,7 @@ h2{font:700 1.6rem/1.1 "Barlow Condensed","Arial Narrow",sans-serif;margin:26px 
 h3{font:600 1.2rem/1.2 "Barlow Condensed","Arial Narrow",sans-serif;margin:0}
 p{margin:6px 0}
 .muted{color:var(--muted)} .small{font-size:.9rem}
-nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;transform:translateZ(0);background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
 nav.tabs button{flex:1;max-width:160px;border:0;border-top:3px solid transparent;background:none;color:var(--muted);font:600 1.05rem "Barlow Condensed","Arial Narrow",sans-serif;padding:11px 4px 13px;cursor:pointer}
 nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--accent)}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 6px}
@@ -149,6 +149,16 @@ th{font-weight:600;color:var(--muted)}
 .opt input{width:20px;height:20px;min-height:0;flex:none;accent-color:var(--accent);margin:0}
 .opt.off{opacity:.45}
 .preview{white-space:pre-wrap;font:400 .85rem/1.4 "Barlow",system-ui,sans-serif;background:var(--soft);border-radius:4px;padding:8px 10px;margin:8px 0 0;max-height:180px;overflow:auto}
+/* menu: verbergen zolang het toetsenbord open is (iOS schuift vaste balken anders mee omhoog) */
+body.kb nav.tabs{display:none}
+body.kb #toast{bottom:16px}
+.sect{margin:14px 0 0;text-transform:uppercase;letter-spacing:.06em;font-size:.75rem}
+.rpanel{padding:0}
+.rhead{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:13px 14px;color:var(--ink);cursor:pointer;text-align:left;font:inherit}
+.rhead .rname{flex:1;min-width:0;font:600 1.2rem/1.2 "Barlow Condensed","Arial Narrow",sans-serif}
+.rhead .chev{color:var(--muted);font-size:.9rem}
+.rpanel.open{padding:0 14px 14px}
+.rpanel.open .rhead{padding:13px 0 0}
 </style>
 </head>
 <body>
@@ -279,7 +289,9 @@ function vToday(){
   if(!r.exercises.length)return h+empty('Dit schema is leeg','Voeg oefeningen toe bij Schema’s.','Oefeningen toevoegen','tab:schemas');
   const doneN=r.exercises.filter(id=>dayEntry(id,S.wDate)).length;
   h+='<p class="muted small count">'+doneN+' van '+r.exercises.length+' gedaan</p>';
-  return h+r.exercises.map(card).join('')+stravaPanel();
+  const todo=r.exercises.filter(id=>!dayEntry(id,S.wDate));
+  const done=r.exercises.filter(id=>dayEntry(id,S.wDate)).sort((a,b)=>dayEntry(a,S.wDate).ts-dayEntry(b,S.wDate).ts);
+  return h+todo.map(card).join('')+(done.length?'<p class="muted small sect">Gedaan</p>'+done.map(card).join(''):'')+stravaPanel();
 }
 function isCardio(exOrId){const ex=typeof exOrId==='string'?exById(exOrId):exOrId;return !!ex&&ex.group==='Cardio'}
 function dec(v){return v!=null?String(v).replace('.',','):''}
@@ -342,15 +354,23 @@ function vSchemas(){
   let h='<h2>Jouw schema’s</h2>';
   if(!D.routines.length)h+='<p class="muted">Een schema is een vaste set oefeningen, bijvoorbeeld “Dag A” en “Dag B”.</p>';
   D.routines.forEach(r=>{
-    const rI=esc(r.id);
-    h+='<div class="panel"><div style="display:flex;gap:8px"><input id="rn-'+rI+'" aria-label="Naam schema" data-rname="'+rI+'" value="'+esc(r.name)+'"><button class="btn '+(S.confirmDel===r.id?'danger':'ghost')+' sm" data-act="delRoutine:'+rI+'">'+(S.confirmDel===r.id?'Zeker weten?':'Verwijderen')+'</button></div>';
-    h+='<ul class="rlist">'+r.exercises.map((exId,i)=>{const ex=exById(exId);return '<li><span class="dot" style="--plate:'+plate(ex)+'"></span><span class="nm">'+esc(ex?ex.name:'Onbekende oefening')+'</span><button class="ib" aria-label="Omhoog" data-act="mv:'+rI+':'+i+':-1"'+(i===0?' disabled':'')+'>↑</button><button class="ib" aria-label="Omlaag" data-act="mv:'+rI+':'+i+':1"'+(i===r.exercises.length-1?' disabled':'')+'>↓</button><button class="ib" aria-label="Uit schema halen" data-act="rm:'+rI+':'+i+'">×</button></li>'}).join('')+'</ul>';
-    h+='<div style="margin-top:10px"><select aria-label="Oefening toevoegen" data-addto="'+rI+'">'+exOptions()+'</select></div></div>';
+    const rI=esc(r.id);const open=S.openRoutine===r.id;
+    h+='<div class="panel rpanel'+(open?' open':'')+'"><button class="rhead" data-act="toggleRoutine:'+rI+'" aria-expanded="'+open+'"><span class="rname">'+esc(r.name)+'</span><span class="muted small">'+r.exercises.length+' oefening'+(r.exercises.length===1?'':'en')+'</span><span class="chev" aria-hidden="true">'+(open?'▴':'▾')+'</span></button>';
+    if(open){
+      h+='<div style="display:flex;gap:8px;margin-top:10px"><input id="rn-'+rI+'" aria-label="Naam schema" data-rname="'+rI+'" value="'+esc(r.name)+'"><button class="btn '+(S.confirmDel===r.id?'danger':'ghost')+' sm" data-act="delRoutine:'+rI+'">'+(S.confirmDel===r.id?'Zeker weten?':'Verwijderen')+'</button></div>';
+      h+='<ul class="rlist">'+r.exercises.map((exId,i)=>{const ex=exById(exId);return '<li><span class="dot" style="--plate:'+plate(ex)+'"></span><span class="nm">'+esc(ex?ex.name:'Onbekende oefening')+'</span><button class="ib" aria-label="Omhoog" data-act="mv:'+rI+':'+i+':-1"'+(i===0?' disabled':'')+'>↑</button><button class="ib" aria-label="Omlaag" data-act="mv:'+rI+':'+i+':1"'+(i===r.exercises.length-1?' disabled':'')+'>↓</button><button class="ib" aria-label="Uit schema halen" data-act="rm:'+rI+':'+i+'">×</button></li>'}).join('')+'</ul>';
+      h+='<div style="margin-top:10px"><select aria-label="Oefening toevoegen" data-addto="'+rI+'">'+exOptions()+'</select></div>';
+    }
+    h+='</div>';
   });
   h+='<div class="panel"><h3>Nieuw schema</h3><div style="display:flex;gap:8px;margin-top:8px"><input id="nr-name" placeholder="Bijv. Dag A" aria-label="Naam nieuw schema"><button class="btn" data-act="newRoutine">Maken</button></div></div>';
-  h+='<h2>Oefeningen</h2><p class="muted small">Mis je er een? Voeg hem toe.</p>';
-  h+='<div class="panel"><div class="grid2"><label class="f">Naam<input id="ne-name" data-newex="name" value="'+esc(S.newEx.name)+'" placeholder="Bijv. Hip thrust"></label><label class="f">Spiergroep<select id="ne-group" data-newex="group">'+Object.keys(GROUPS).map(g=>'<option'+(g===S.newEx.group?' selected':'')+'>'+g+'</option>').join('')+'</select></label></div><p style="margin-top:10px"><button class="btn" data-act="addEx">Oefening toevoegen</button></p>';
-  h+='<div class="cat">'+D.exercises.slice().sort((a,b)=>a.name.localeCompare(b.name,'nl')).map(e=>'<div><span class="dot" style="--plate:'+plate(e)+'"></span>'+esc(e.name)+'</div>').join('')+'</div></div>';
+  const openEx=!!S.openCatalog;
+  h+='<div class="panel rpanel'+(openEx?' open':'')+'"><button class="rhead" data-act="toggleCatalog" aria-expanded="'+openEx+'"><span class="rname">Oefeningen</span><span class="muted small">'+D.exercises.length+' in de lijst</span><span class="chev" aria-hidden="true">'+(openEx?'▴':'▾')+'</span></button>';
+  if(openEx){
+    h+='<p class="muted small" style="margin-top:10px">Mis je er een? Voeg hem toe.</p><div class="grid2"><label class="f">Naam<input id="ne-name" data-newex="name" value="'+esc(S.newEx.name)+'" placeholder="Bijv. Hip thrust"></label><label class="f">Spiergroep<select id="ne-group" data-newex="group">'+Object.keys(GROUPS).map(g=>'<option'+(g===S.newEx.group?' selected':'')+'>'+g+'</option>').join('')+'</select></label></div><p style="margin-top:10px"><button class="btn" data-act="addEx">Oefening toevoegen</button></p>';
+    h+='<div class="cat">'+D.exercises.slice().sort((a,b)=>a.name.localeCompare(b.name,'nl')).map(e=>'<div><span class="dot" style="--plate:'+plate(e)+'"></span>'+esc(e.name)+'</div>').join('')+'</div>';
+  }
+  h+='</div>';
   return h;
 }
 
@@ -663,6 +683,14 @@ async function stSend(){
 })();
 
 /* ---------- acties ---------- */
+// Zet de oefening in het actieve schema direct na de oefeningen die vandaag al gedaan zijn.
+// Zo staat het schema de volgende keer in de volgorde waarin je ze deze keer deed.
+function rememberOrder(exId){
+  const r=D.routines.find(x=>x.id===S.routineId);if(!r||!r.exercises.includes(exId))return;
+  const doneBefore=r.exercises.filter(id=>id!==exId&&dayEntry(id,S.wDate)).length;
+  r.exercises=r.exercises.filter(id=>id!==exId);
+  r.exercises.splice(doneBefore,0,exId);
+}
 function saveSet(exId){
   const d=draftFor(exId);const note=String(d.note||'').trim().slice(0,200);let vals;
   if(isCardio(exId)){
@@ -673,6 +701,7 @@ function saveSet(exId){
     vals={weight:w,sets:int(d.sets),reps:int(d.reps),note};
   }
   const de=dayEntry(exId,S.wDate);
+  if(!de&&S.wDate===today())rememberOrder(exId);
   if(de)Object.assign(de,vals);
   else D.entries.push(Object.assign({id:rid(),ts:Date.now(),date:S.wDate,exerciseId:exId},vals));
   D.meta=D.meta||{};if(!D.meta[S.wDate])D.meta[S.wDate]={gym:gymFor(S.wDate)};
@@ -689,13 +718,15 @@ document.addEventListener('click',ev=>{
   else if(act==='wToday'){S.wDate=today();S.drafts={};S.open={};render()}
   else if(act==='gotoDate'){S.wDate=a[0];S.drafts={};S.hist={};S.open={};render();window.scrollTo(0,0)}
   else if(act==='open'){S.open[a[0]]=true;render()}
+  else if(act==='toggleRoutine'){S.openRoutine=S.openRoutine===a[0]?null:a[0];render()}
+  else if(act==='toggleCatalog'){S.openCatalog=!S.openCatalog;render()}
   else if(act==='close'){delete S.open[a[0]];delete S.drafts[a[0]];render()}
   else if(act==='step'){const d=Object.assign({},draftFor(a[0]));const w=(num(d.weight)||0)+Number(a[1]);d.weight=String(Math.max(0,Math.round(w*100)/100)).replace('.',',');S.drafts[a[0]]=d;render()}
   else if(act==='stepm'){const d=Object.assign({},draftFor(a[0]));d.minutes=String(Math.max(0,(int(d.minutes)||0)+Number(a[1])));S.drafts[a[0]]=d;render()}
   else if(act==='save')saveSet(a[0]);
   else if(act==='hist'){S.hist[a[0]]=!S.hist[a[0]];render()}
   else if(act==='delEntry'){const e=D.entries.find(x=>x.id===a[0]);D.entries=D.entries.filter(x=>x.id!==a[0]);if(e)delete S.drafts[e.exerciseId];save();toast('Verwijderd');render()}
-  else if(act==='newRoutine'){const n=$('#nr-name').value.trim();if(!n)return toast('Geef het schema een naam.');const r={id:rid(),name:n.slice(0,40),exercises:[]};D.routines.push(r);S.routineId=r.id;save();render()}
+  else if(act==='newRoutine'){const n=$('#nr-name').value.trim();if(!n)return toast('Geef het schema een naam.');const r={id:rid(),name:n.slice(0,40),exercises:[]};D.routines.push(r);S.routineId=r.id;S.openRoutine=r.id;save();render()}
   else if(act==='delRoutine'){if(S.confirmDel!==a[0]){S.confirmDel=a[0];return render()}S.confirmDel=null;D.routines=D.routines.filter(r=>r.id!==a[0]);save();render()}
   else if(act==='mv'){const r=D.routines.find(x=>x.id===a[0]);const i=+a[1],j=i+(+a[2]);if(!r||j<0||j>=r.exercises.length)return;[r.exercises[i],r.exercises[j]]=[r.exercises[j],r.exercises[i]];save();render()}
   else if(act==='rm'){const r=D.routines.find(x=>x.id===a[0]);if(!r)return;r.exercises.splice(+a[1],1);save();render()}
@@ -750,6 +781,16 @@ document.addEventListener('change',ev=>{
   else if(t.dataset.height){D.height=num(t.value);save();toast('Lengte opgeslagen');render()}
 });
 
+// Toetsenbord open = een invoerveld heeft focus, of het zichtbare scherm is flink kleiner geworden
+function kbCheck(){
+  const a=document.activeElement;
+  const typing=a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT')&&!['checkbox','radio','button','file'].includes(a.type);
+  const vv=window.visualViewport;const small=vv?vv.height<window.innerHeight*0.8:false;
+  document.body.classList.toggle('kb',!!(typing||small));
+}
+document.addEventListener('focusin',kbCheck);
+document.addEventListener('focusout',()=>setTimeout(kbCheck,50));
+if(window.visualViewport)window.visualViewport.addEventListener('resize',kbCheck);
 render();
 if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{})}
 })();
