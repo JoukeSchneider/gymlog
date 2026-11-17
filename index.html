@@ -926,13 +926,13 @@ document.addEventListener('change',ev=>{
   else if(t.dataset.height){D.height=num(t.value);save();toast('Lengte opgeslagen');render()}
 });
 
-// Toetsenbord open = een invoerveld heeft focus, of het zichtbare scherm is flink kleiner geworden
-function kbCheck(){
+// Menu alleen verbergen zolang je echt in een tekstveld typt.
+// (Geen schermhoogte-meting meer: die bleef na Strava of een app-wissel soms 'hangen'.)
+function isTyping(){
   const a=document.activeElement;
-  const typing=a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT')&&!['checkbox','radio','button','file'].includes(a.type);
-  const vv=window.visualViewport;const small=vv?vv.height<window.innerHeight*0.8:false;
-  document.body.classList.toggle('kb',!!(typing||small));
+  return !!a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')&&!['checkbox','radio','button','file','submit','range','color'].includes(a.type)&&document.hasFocus();
 }
+function kbCheck(){document.body.classList.toggle('kb',isTyping())}
 document.addEventListener('focusin',ev=>{
   kbCheck();
   // Houd het veld waarin je typt midden in beeld, boven het toetsenbord
@@ -942,7 +942,12 @@ document.addEventListener('focusin',ev=>{
   }
 });
 document.addEventListener('focusout',()=>setTimeout(kbCheck,50));
-if(window.visualViewport)window.visualViewport.addEventListener('resize',kbCheck);
+// Vangnetten: bij terugkeren in de app, scrollen of tikken buiten een veld komt het menu altijd terug
+['pageshow','focus'].forEach(ev=>window.addEventListener(ev,kbCheck));
+document.addEventListener('visibilitychange',kbCheck);
+document.addEventListener('touchstart',()=>setTimeout(kbCheck,120),{passive:true});
+window.addEventListener('scroll',()=>{if(!isTyping())document.body.classList.remove('kb')},{passive:true});
+setInterval(kbCheck,1500);
 render();
 if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{})}
 })();
